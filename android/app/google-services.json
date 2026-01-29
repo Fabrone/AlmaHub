@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "258636981076",
+    "project_id": "almahub-1fc5a",
+    "storage_bucket": "almahub-1fc5a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:258636981076:android:89ab31207a650a3e6fdec1",
+        "android_client_info": {
+          "package_name": "com.example.almahub"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsmXrzBoptTUXe9FkMDY_14T5Lb3bkUKg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
