@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'almahub_dashboard.dart';
+import 'screens/role_selection_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1A237E)),
         useMaterial3: true,
       ),
-      home: const AlmaHubDashboard(),
+      home: const RoleSelectionScreen(),
     );
   }
 }

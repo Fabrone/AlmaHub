@@ -41,6 +41,12 @@ dependencies:
   intl: ^0.20.2
   file_picker: ^10.3.10
   path: ^1.9.1
+  excel: ^4.0.6
+  path_provider: ^2.1.5
+  universal_html: ^2.3.0
+  open_file: ^3.5.11
+  url_launcher: ^6.3.2
+  logger: ^2.6.2
 
 dev_dependencies:
   flutter_test:
