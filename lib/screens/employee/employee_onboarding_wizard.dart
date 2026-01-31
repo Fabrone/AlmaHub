@@ -1108,7 +1108,6 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     );
   }
 
-  // Template for other steps - implement similarly
   Widget _buildEmploymentDetailsStep() {
     return _buildStepContainer(
       form: Form(
@@ -1118,7 +1117,177 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('B. Employment Details'),
             const SizedBox(height: 24),
-            const Text('Note: Add employment detail fields with onChanged callbacks similar to Step 1'),
+            
+            // Job Title
+            TextFormField(
+              initialValue: _employmentDetails.jobTitle,
+              decoration: _inputDecoration('Job Title *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _employmentDetails = EmploymentDetails(
+                    jobTitle: value,
+                    department: _employmentDetails.department,
+                    employmentType: _employmentDetails.employmentType,
+                    startDate: _employmentDetails.startDate,
+                    workingHours: _employmentDetails.workingHours,
+                    workLocation: _employmentDetails.workLocation,
+                    supervisorName: _employmentDetails.supervisorName,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Department
+            TextFormField(
+              initialValue: _employmentDetails.department,
+              decoration: _inputDecoration('Department *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _employmentDetails = EmploymentDetails(
+                    jobTitle: _employmentDetails.jobTitle,
+                    department: value,
+                    employmentType: _employmentDetails.employmentType,
+                    startDate: _employmentDetails.startDate,
+                    workingHours: _employmentDetails.workingHours,
+                    workLocation: _employmentDetails.workLocation,
+                    supervisorName: _employmentDetails.supervisorName,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Employment Type
+            DropdownButtonFormField<String>(
+              initialValue: _employmentDetails.employmentType.isEmpty 
+                  ? null 
+                  : _employmentDetails.employmentType,
+              decoration: _inputDecoration('Employment Type *'),
+              items: ['Permanent', 'Contract', 'Casual']
+                  .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                  .toList(),
+              validator: (value) => value == null ? 'Required' : null,
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _employmentDetails = EmploymentDetails(
+                      jobTitle: _employmentDetails.jobTitle,
+                      department: _employmentDetails.department,
+                      employmentType: value,
+                      startDate: _employmentDetails.startDate,
+                      workingHours: _employmentDetails.workingHours,
+                      workLocation: _employmentDetails.workLocation,
+                      supervisorName: _employmentDetails.supervisorName,
+                    );
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Start Date
+            InkWell(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _employmentDetails.startDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2030),
+                );
+                if (date != null) {
+                  setState(() {
+                    _employmentDetails = EmploymentDetails(
+                      jobTitle: _employmentDetails.jobTitle,
+                      department: _employmentDetails.department,
+                      employmentType: _employmentDetails.employmentType,
+                      startDate: date,
+                      workingHours: _employmentDetails.workingHours,
+                      workLocation: _employmentDetails.workLocation,
+                      supervisorName: _employmentDetails.supervisorName,
+                    );
+                  });
+                }
+              },
+              child: InputDecorator(
+                decoration: _inputDecoration('Start Date *'),
+                child: Text(
+                  _employmentDetails.startDate != null
+                      ? DateFormat('dd/MM/yyyy').format(_employmentDetails.startDate!)
+                      : 'Select date',
+                  style: TextStyle(
+                    color: _employmentDetails.startDate != null 
+                        ? Colors.black 
+                        : Colors.grey,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Working Hours
+            TextFormField(
+              initialValue: _employmentDetails.workingHours,
+              decoration: _inputDecoration('Working Hours (e.g., 8:00 AM - 5:00 PM) *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _employmentDetails = EmploymentDetails(
+                    jobTitle: _employmentDetails.jobTitle,
+                    department: _employmentDetails.department,
+                    employmentType: _employmentDetails.employmentType,
+                    startDate: _employmentDetails.startDate,
+                    workingHours: value,
+                    workLocation: _employmentDetails.workLocation,
+                    supervisorName: _employmentDetails.supervisorName,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Work Location
+            TextFormField(
+              initialValue: _employmentDetails.workLocation,
+              decoration: _inputDecoration('Work Location *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _employmentDetails = EmploymentDetails(
+                    jobTitle: _employmentDetails.jobTitle,
+                    department: _employmentDetails.department,
+                    employmentType: _employmentDetails.employmentType,
+                    startDate: _employmentDetails.startDate,
+                    workingHours: _employmentDetails.workingHours,
+                    workLocation: value,
+                    supervisorName: _employmentDetails.supervisorName,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Supervisor Name
+            TextFormField(
+              initialValue: _employmentDetails.supervisorName,
+              decoration: _inputDecoration('Supervisor/Reporting Manager *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _employmentDetails = EmploymentDetails(
+                    jobTitle: _employmentDetails.jobTitle,
+                    department: _employmentDetails.department,
+                    employmentType: _employmentDetails.employmentType,
+                    startDate: _employmentDetails.startDate,
+                    workingHours: _employmentDetails.workingHours,
+                    workLocation: _employmentDetails.workLocation,
+                    supervisorName: value,
+                  );
+                });
+              },
+            ),
           ],
         ),
       ),
@@ -1134,7 +1303,148 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('C. Mandatory Statutory Documents'),
             const SizedBox(height: 24),
-            const Text('Note: Add statutory document fields with onChanged callbacks similar to Step 1'),
+            
+            // KRA PIN
+            TextFormField(
+              initialValue: _statutoryDocs.kraPinNumber,
+              decoration: _inputDecoration('KRA PIN Number *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: value,
+                    kraPinCertificateUrl: _statutoryDocs.kraPinCertificateUrl,
+                    nssfNumber: _statutoryDocs.nssfNumber,
+                    nssfConfirmationUrl: _statutoryDocs.nssfConfirmationUrl,
+                    nhifNumber: _statutoryDocs.nhifNumber,
+                    nhifConfirmationUrl: _statutoryDocs.nhifConfirmationUrl,
+                    p9FormUrl: _statutoryDocs.p9FormUrl,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // KRA PIN Certificate Upload
+            _buildUploadButton(
+              'KRA PIN Certificate *',
+              () => _uploadDocument('kra_pin', (url) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: _statutoryDocs.kraPinNumber,
+                    kraPinCertificateUrl: url,
+                    nssfNumber: _statutoryDocs.nssfNumber,
+                    nssfConfirmationUrl: _statutoryDocs.nssfConfirmationUrl,
+                    nhifNumber: _statutoryDocs.nhifNumber,
+                    nhifConfirmationUrl: _statutoryDocs.nhifConfirmationUrl,
+                    p9FormUrl: _statutoryDocs.p9FormUrl,
+                  );
+                });
+              }),
+              _statutoryDocs.kraPinCertificateUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            // NSSF Number
+            TextFormField(
+              initialValue: _statutoryDocs.nssfNumber,
+              decoration: _inputDecoration('NSSF Number *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: _statutoryDocs.kraPinNumber,
+                    kraPinCertificateUrl: _statutoryDocs.kraPinCertificateUrl,
+                    nssfNumber: value,
+                    nssfConfirmationUrl: _statutoryDocs.nssfConfirmationUrl,
+                    nhifNumber: _statutoryDocs.nhifNumber,
+                    nhifConfirmationUrl: _statutoryDocs.nhifConfirmationUrl,
+                    p9FormUrl: _statutoryDocs.p9FormUrl,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // NSSF Confirmation Upload
+            _buildUploadButton(
+              'NSSF Registration Confirmation *',
+              () => _uploadDocument('nssf_confirmation', (url) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: _statutoryDocs.kraPinNumber,
+                    kraPinCertificateUrl: _statutoryDocs.kraPinCertificateUrl,
+                    nssfNumber: _statutoryDocs.nssfNumber,
+                    nssfConfirmationUrl: url,
+                    nhifNumber: _statutoryDocs.nhifNumber,
+                    nhifConfirmationUrl: _statutoryDocs.nhifConfirmationUrl,
+                    p9FormUrl: _statutoryDocs.p9FormUrl,
+                  );
+                });
+              }),
+              _statutoryDocs.nssfConfirmationUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            // NHIF Number
+            TextFormField(
+              initialValue: _statutoryDocs.nhifNumber,
+              decoration: _inputDecoration('NHIF Number *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: _statutoryDocs.kraPinNumber,
+                    kraPinCertificateUrl: _statutoryDocs.kraPinCertificateUrl,
+                    nssfNumber: _statutoryDocs.nssfNumber,
+                    nssfConfirmationUrl: _statutoryDocs.nssfConfirmationUrl,
+                    nhifNumber: value,
+                    nhifConfirmationUrl: _statutoryDocs.nhifConfirmationUrl,
+                    p9FormUrl: _statutoryDocs.p9FormUrl,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // NHIF Confirmation Upload
+            _buildUploadButton(
+              'NHIF Registration Confirmation *',
+              () => _uploadDocument('nhif_confirmation', (url) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: _statutoryDocs.kraPinNumber,
+                    kraPinCertificateUrl: _statutoryDocs.kraPinCertificateUrl,
+                    nssfNumber: _statutoryDocs.nssfNumber,
+                    nssfConfirmationUrl: _statutoryDocs.nssfConfirmationUrl,
+                    nhifNumber: _statutoryDocs.nhifNumber,
+                    nhifConfirmationUrl: url,
+                    p9FormUrl: _statutoryDocs.p9FormUrl,
+                  );
+                });
+              }),
+              _statutoryDocs.nhifConfirmationUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            // P9 Form Upload (Optional)
+            _buildUploadButton(
+              'P9 Form (if joining mid-year)',
+              () => _uploadDocument('p9_form', (url) {
+                setState(() {
+                  _statutoryDocs = StatutoryDocuments(
+                    kraPinNumber: _statutoryDocs.kraPinNumber,
+                    kraPinCertificateUrl: _statutoryDocs.kraPinCertificateUrl,
+                    nssfNumber: _statutoryDocs.nssfNumber,
+                    nssfConfirmationUrl: _statutoryDocs.nssfConfirmationUrl,
+                    nhifNumber: _statutoryDocs.nhifNumber,
+                    nhifConfirmationUrl: _statutoryDocs.nhifConfirmationUrl,
+                    p9FormUrl: url,
+                  );
+                });
+              }),
+              _statutoryDocs.p9FormUrl,
+            ),
           ],
         ),
       ),
@@ -1150,7 +1460,323 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('D. Payroll & Payment Details'),
             const SizedBox(height: 24),
-            const Text('Note: Add payroll fields with onChanged callbacks similar to Step 1'),
+            
+            // Basic Salary
+            TextFormField(
+              initialValue: _payrollDetails.basicSalary > 0 
+                  ? _payrollDetails.basicSalary.toString() 
+                  : '',
+              decoration: _inputDecoration('Basic Salary (KES) *'),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value?.isEmpty ?? true) return 'Required';
+                if (double.tryParse(value!) == null) return 'Enter valid amount';
+                return null;
+              },
+              onChanged: (value) {
+                setState(() {
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: double.tryParse(value) ?? 0,
+                    allowances: _payrollDetails.allowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Allowances',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Housing Allowance
+            TextFormField(
+              initialValue: _payrollDetails.allowances['housing']?.toString() ?? '',
+              decoration: _inputDecoration('Housing Allowance (KES)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  final newAllowances = Map<String, double>.from(_payrollDetails.allowances);
+                  final amount = double.tryParse(value) ?? 0;
+                  if (amount > 0) {
+                    newAllowances['housing'] = amount;
+                  } else {
+                    newAllowances.remove('housing');
+                  }
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: newAllowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Transport Allowance
+            TextFormField(
+              initialValue: _payrollDetails.allowances['transport']?.toString() ?? '',
+              decoration: _inputDecoration('Transport Allowance (KES)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  final newAllowances = Map<String, double>.from(_payrollDetails.allowances);
+                  final amount = double.tryParse(value) ?? 0;
+                  if (amount > 0) {
+                    newAllowances['transport'] = amount;
+                  } else {
+                    newAllowances.remove('transport');
+                  }
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: newAllowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Other Allowances
+            TextFormField(
+              initialValue: _payrollDetails.allowances['other']?.toString() ?? '',
+              decoration: _inputDecoration('Other Allowances (KES)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  final newAllowances = Map<String, double>.from(_payrollDetails.allowances);
+                  final amount = double.tryParse(value) ?? 0;
+                  if (amount > 0) {
+                    newAllowances['other'] = amount;
+                  } else {
+                    newAllowances.remove('other');
+                  }
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: newAllowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Deductions',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Loans
+            TextFormField(
+              initialValue: _payrollDetails.deductions['loans']?.toString() ?? '',
+              decoration: _inputDecoration('Loans (KES)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  final newDeductions = Map<String, double>.from(_payrollDetails.deductions);
+                  final amount = double.tryParse(value) ?? 0;
+                  if (amount > 0) {
+                    newDeductions['loans'] = amount;
+                  } else {
+                    newDeductions.remove('loans');
+                  }
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: newDeductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // SACCO
+            TextFormField(
+              initialValue: _payrollDetails.deductions['sacco']?.toString() ?? '',
+              decoration: _inputDecoration('SACCO Deductions (KES)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  final newDeductions = Map<String, double>.from(_payrollDetails.deductions);
+                  final amount = double.tryParse(value) ?? 0;
+                  if (amount > 0) {
+                    newDeductions['sacco'] = amount;
+                  } else {
+                    newDeductions.remove('sacco');
+                  }
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: newDeductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Advances
+            TextFormField(
+              initialValue: _payrollDetails.deductions['advances']?.toString() ?? '',
+              decoration: _inputDecoration('Advances (KES)'),
+              keyboardType: TextInputType.number,
+              onChanged: (value) {
+                setState(() {
+                  final newDeductions = Map<String, double>.from(_payrollDetails.deductions);
+                  final amount = double.tryParse(value) ?? 0;
+                  if (amount > 0) {
+                    newDeductions['advances'] = amount;
+                  } else {
+                    newDeductions.remove('advances');
+                  }
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: newDeductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Bank Details',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Bank Name
+            TextFormField(
+              initialValue: _payrollDetails.bankDetails?.bankName ?? '',
+              decoration: _inputDecoration('Bank Name *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: BankDetails(
+                      bankName: value,
+                      branch: _payrollDetails.bankDetails?.branch ?? '',
+                      accountNumber: _payrollDetails.bankDetails?.accountNumber ?? '',
+                    ),
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Branch
+            TextFormField(
+              initialValue: _payrollDetails.bankDetails?.branch ?? '',
+              decoration: _inputDecoration('Branch *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: BankDetails(
+                      bankName: _payrollDetails.bankDetails?.bankName ?? '',
+                      branch: value,
+                      accountNumber: _payrollDetails.bankDetails?.accountNumber ?? '',
+                    ),
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // Account Number
+            TextFormField(
+              initialValue: _payrollDetails.bankDetails?.accountNumber ?? '',
+              decoration: _inputDecoration('Account Number *'),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+              onChanged: (value) {
+                setState(() {
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: BankDetails(
+                      bankName: _payrollDetails.bankDetails?.bankName ?? '',
+                      branch: _payrollDetails.bankDetails?.branch ?? '',
+                      accountNumber: value,
+                    ),
+                    mpesaDetails: _payrollDetails.mpesaDetails,
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'M-Pesa Details (Optional)',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // M-Pesa Number
+            TextFormField(
+              initialValue: _payrollDetails.mpesaDetails?.phoneNumber ?? '',
+              decoration: _inputDecoration('M-Pesa Phone Number'),
+              keyboardType: TextInputType.phone,
+              onChanged: (value) {
+                setState(() {
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: MpesaDetails(
+                      phoneNumber: value,
+                      name: _payrollDetails.mpesaDetails?.name ?? '',
+                    ),
+                  );
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // M-Pesa Registered Name
+            TextFormField(
+              initialValue: _payrollDetails.mpesaDetails?.name ?? '',
+              decoration: _inputDecoration('M-Pesa Registered Name'),
+              onChanged: (value) {
+                setState(() {
+                  _payrollDetails = PayrollDetails(
+                    basicSalary: _payrollDetails.basicSalary,
+                    allowances: _payrollDetails.allowances,
+                    deductions: _payrollDetails.deductions,
+                    bankDetails: _payrollDetails.bankDetails,
+                    mpesaDetails: MpesaDetails(
+                      phoneNumber: _payrollDetails.mpesaDetails?.phoneNumber ?? '',
+                      name: value,
+                    ),
+                  );
+                });
+              },
+            ),
           ],
         ),
       ),
@@ -1166,7 +1792,170 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('E. Academic & Professional Documents'),
             const SizedBox(height: 24),
-            const Text('Note: Add academic document fields with onChanged callbacks similar to Step 1'),
+            
+            const Text(
+              'Academic Certificates',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Academic Certificates List
+            ..._academicDocs.academicCertificates.asMap().entries.map((entry) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.school, color: Color(0xFF1A237E)),
+                  title: Text(entry.value.name),
+                  subtitle: Text(DateFormat('dd/MM/yyyy').format(entry.value.uploadedAt)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      setState(() {
+                        final newList = List<DocumentInfo>.from(_academicDocs.academicCertificates);
+                        newList.removeAt(entry.key);
+                        _academicDocs = AcademicDocuments(
+                          academicCertificates: newList,
+                          professionalCertificates: _academicDocs.professionalCertificates,
+                          professionalRegistrations: _academicDocs.professionalRegistrations,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }),
+            
+            // Add Academic Certificate Button
+            ElevatedButton.icon(
+              onPressed: () => _uploadDocument('academic_cert', (url) {
+                final doc = DocumentInfo(
+                  name: 'Academic Certificate ${_academicDocs.academicCertificates.length + 1}',
+                  url: url,
+                  type: 'pdf',
+                  uploadedAt: DateTime.now(),
+                );
+                setState(() {
+                  _academicDocs = AcademicDocuments(
+                    academicCertificates: [..._academicDocs.academicCertificates, doc],
+                    professionalCertificates: _academicDocs.professionalCertificates,
+                    professionalRegistrations: _academicDocs.professionalRegistrations,
+                  );
+                });
+              }),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Academic Certificate'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Professional Certificates',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Professional Certificates List
+            ..._academicDocs.professionalCertificates.asMap().entries.map((entry) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.workspace_premium, color: Color(0xFF1A237E)),
+                  title: Text(entry.value.name),
+                  subtitle: Text(DateFormat('dd/MM/yyyy').format(entry.value.uploadedAt)),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      setState(() {
+                        final newList = List<DocumentInfo>.from(_academicDocs.professionalCertificates);
+                        newList.removeAt(entry.key);
+                        _academicDocs = AcademicDocuments(
+                          academicCertificates: _academicDocs.academicCertificates,
+                          professionalCertificates: newList,
+                          professionalRegistrations: _academicDocs.professionalRegistrations,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }),
+            
+            // Add Professional Certificate Button
+            ElevatedButton.icon(
+              onPressed: () => _uploadDocument('professional_cert', (url) {
+                final doc = DocumentInfo(
+                  name: 'Professional Certificate ${_academicDocs.professionalCertificates.length + 1}',
+                  url: url,
+                  type: 'pdf',
+                  uploadedAt: DateTime.now(),
+                );
+                setState(() {
+                  _academicDocs = AcademicDocuments(
+                    academicCertificates: _academicDocs.academicCertificates,
+                    professionalCertificates: [..._academicDocs.professionalCertificates, doc],
+                    professionalRegistrations: _academicDocs.professionalRegistrations,
+                  );
+                });
+              }),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Professional Certificate'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Professional Registration Numbers',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'e.g., EBK, ICPAK, IHRM, etc.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            
+            // Professional Registrations
+            ..._academicDocs.professionalRegistrations.entries.map((entry) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.verified, color: Color(0xFF1A237E)),
+                  title: Text(entry.key),
+                  subtitle: Text(entry.value),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      setState(() {
+                        final newMap = Map<String, String>.from(_academicDocs.professionalRegistrations);
+                        newMap.remove(entry.key);
+                        _academicDocs = AcademicDocuments(
+                          academicCertificates: _academicDocs.academicCertificates,
+                          professionalCertificates: _academicDocs.professionalCertificates,
+                          professionalRegistrations: newMap,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }),
+            
+            // Add Professional Registration Button
+            ElevatedButton.icon(
+              onPressed: () => _showAddProfessionalRegistrationDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Professional Registration'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+            ),
           ],
         ),
       ),
@@ -1182,7 +1971,117 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('F. Contracts & HR Forms'),
             const SizedBox(height: 24),
-            const Text('Note: Add contract fields with onChanged callbacks similar to Step 1'),
+            
+            // Employment Contract Upload
+            _buildUploadButton(
+              'Signed Employment Contract / Offer Letter *',
+              () => _uploadDocument('employment_contract', (url) {
+                setState(() {
+                  _contractsForms = ContractsAndForms(
+                    employmentContractUrl: url,
+                    employeeInfoFormUrl: _contractsForms.employeeInfoFormUrl,
+                    ndaUrl: _contractsForms.ndaUrl,
+                    codeOfConductAcknowledged: _contractsForms.codeOfConductAcknowledged,
+                    dataProtectionConsentGiven: _contractsForms.dataProtectionConsentGiven,
+                    consentDate: _contractsForms.consentDate,
+                  );
+                });
+              }),
+              _contractsForms.employmentContractUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            // Employee Info Form Upload
+            _buildUploadButton(
+              'Employee Information Form *',
+              () => _uploadDocument('employee_info_form', (url) {
+                setState(() {
+                  _contractsForms = ContractsAndForms(
+                    employmentContractUrl: _contractsForms.employmentContractUrl,
+                    employeeInfoFormUrl: url,
+                    ndaUrl: _contractsForms.ndaUrl,
+                    codeOfConductAcknowledged: _contractsForms.codeOfConductAcknowledged,
+                    dataProtectionConsentGiven: _contractsForms.dataProtectionConsentGiven,
+                    consentDate: _contractsForms.consentDate,
+                  );
+                });
+              }),
+              _contractsForms.employeeInfoFormUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            // NDA Upload (Optional)
+            _buildUploadButton(
+              'Confidentiality / NDA (if applicable)',
+              () => _uploadDocument('nda', (url) {
+                setState(() {
+                  _contractsForms = ContractsAndForms(
+                    employmentContractUrl: _contractsForms.employmentContractUrl,
+                    employeeInfoFormUrl: _contractsForms.employeeInfoFormUrl,
+                    ndaUrl: url,
+                    codeOfConductAcknowledged: _contractsForms.codeOfConductAcknowledged,
+                    dataProtectionConsentGiven: _contractsForms.dataProtectionConsentGiven,
+                    consentDate: _contractsForms.consentDate,
+                  );
+                });
+              }),
+              _contractsForms.ndaUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            // Code of Conduct Acknowledgment
+            Card(
+              child: CheckboxListTile(
+                title: const Text('Code of Conduct Acknowledged *'),
+                subtitle: const Text('I have read and understood the company code of conduct'),
+                value: _contractsForms.codeOfConductAcknowledged,
+                onChanged: (value) {
+                  setState(() {
+                    _contractsForms = ContractsAndForms(
+                      employmentContractUrl: _contractsForms.employmentContractUrl,
+                      employeeInfoFormUrl: _contractsForms.employeeInfoFormUrl,
+                      ndaUrl: _contractsForms.ndaUrl,
+                      codeOfConductAcknowledged: value ?? false,
+                      dataProtectionConsentGiven: _contractsForms.dataProtectionConsentGiven,
+                      consentDate: _contractsForms.consentDate,
+                    );
+                  });
+                },
+                activeColor: const Color(0xFF1A237E),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Data Protection Consent
+            Card(
+              child: CheckboxListTile(
+                title: const Text('Data Protection Consent (Kenya Data Protection Act) *'),
+                subtitle: const Text('I consent to the processing of my personal data as per the Data Protection Act'),
+                value: _contractsForms.dataProtectionConsentGiven,
+                onChanged: (value) {
+                  setState(() {
+                    _contractsForms = ContractsAndForms(
+                      employmentContractUrl: _contractsForms.employmentContractUrl,
+                      employeeInfoFormUrl: _contractsForms.employeeInfoFormUrl,
+                      ndaUrl: _contractsForms.ndaUrl,
+                      codeOfConductAcknowledged: _contractsForms.codeOfConductAcknowledged,
+                      dataProtectionConsentGiven: value ?? false,
+                      consentDate: value == true ? DateTime.now() : null,
+                    );
+                  });
+                },
+                activeColor: const Color(0xFF1A237E),
+              ),
+            ),
+            
+            if (_contractsForms.dataProtectionConsentGiven && _contractsForms.consentDate != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 16),
+                child: Text(
+                  'Consent given on: ${DateFormat('dd/MM/yyyy HH:mm').format(_contractsForms.consentDate!)}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
           ],
         ),
       ),
@@ -1198,7 +2097,147 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('G. Benefits & Insurance'),
             const SizedBox(height: 24),
-            const Text('Note: Add benefits fields with onChanged callbacks similar to Step 1'),
+            
+            const Text(
+              'NHIF Dependants',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // NHIF Dependants List
+            ..._benefitsInsurance.nhifDependants.asMap().entries.map((entry) {
+              final dependant = entry.value;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.person, color: Color(0xFF1A237E)),
+                  title: Text(dependant.name),
+                  subtitle: Text('${dependant.relationship}${dependant.dateOfBirth != null ? ' - ${DateFormat('dd/MM/yyyy').format(dependant.dateOfBirth!)}' : ''}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      setState(() {
+                        final newList = List<Dependant>.from(_benefitsInsurance.nhifDependants);
+                        newList.removeAt(entry.key);
+                        _benefitsInsurance = BenefitsInsurance(
+                          nhifDependants: newList,
+                          medicalInsuranceFormUrl: _benefitsInsurance.medicalInsuranceFormUrl,
+                          beneficiaries: _benefitsInsurance.beneficiaries,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }),
+            
+            // Add Dependant Button
+            ElevatedButton.icon(
+              onPressed: () => _showAddDependantDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add NHIF Dependant'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Medical Insurance Form Upload
+            _buildUploadButton(
+              'Medical Insurance Enrolment Form',
+              () => _uploadDocument('medical_insurance', (url) {
+                setState(() {
+                  _benefitsInsurance = BenefitsInsurance(
+                    nhifDependants: _benefitsInsurance.nhifDependants,
+                    medicalInsuranceFormUrl: url,
+                    beneficiaries: _benefitsInsurance.beneficiaries,
+                  );
+                });
+              }),
+              _benefitsInsurance.medicalInsuranceFormUrl,
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Beneficiaries',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            // Beneficiaries List
+            ..._benefitsInsurance.beneficiaries.asMap().entries.map((entry) {
+              final beneficiary = entry.value;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.account_circle, color: Color(0xFF1A237E)),
+                  title: Text(beneficiary.name),
+                  subtitle: Text('${beneficiary.relationship} - ${beneficiary.percentage}%\n${beneficiary.contact}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      setState(() {
+                        final newList = List<Beneficiary>.from(_benefitsInsurance.beneficiaries);
+                        newList.removeAt(entry.key);
+                        _benefitsInsurance = BenefitsInsurance(
+                          nhifDependants: _benefitsInsurance.nhifDependants,
+                          medicalInsuranceFormUrl: _benefitsInsurance.medicalInsuranceFormUrl,
+                          beneficiaries: newList,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }),
+            
+            // Total Percentage Display
+            if (_benefitsInsurance.beneficiaries.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: _getBeneficiaryTotalPercentage() == 100 
+                      ? Colors.green.shade50 
+                      : Colors.orange.shade50,
+                  border: Border.all(
+                    color: _getBeneficiaryTotalPercentage() == 100 
+                        ? Colors.green 
+                        : Colors.orange,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total Percentage:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '${_getBeneficiaryTotalPercentage()}%',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _getBeneficiaryTotalPercentage() == 100 
+                            ? Colors.green 
+                            : Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            // Add Beneficiary Button
+            ElevatedButton.icon(
+              onPressed: () => _showAddBeneficiaryDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Beneficiary'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+            ),
           ],
         ),
       ),
@@ -1214,7 +2253,539 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           children: [
             _buildSectionTitle('H. Work Tools & Access'),
             const SizedBox(height: 24),
-            const Text('Note: Add work tools fields with onChanged callbacks similar to Step 1'),
+            
+            // Work Email
+            TextFormField(
+              initialValue: _workTools.workEmail,
+              decoration: _inputDecoration('Work Email Address'),
+              keyboardType: TextInputType.emailAddress,
+              enabled: false, // Usually created by IT
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            
+            // HRIS Profile Status
+            Card(
+              child: SwitchListTile(
+                title: const Text('HRIS / Payroll System Profile Created'),
+                subtitle: const Text('Has your profile been set up in the HRIS system?'),
+                value: _workTools.hrisProfileCreated,
+                onChanged: (value) {
+                  setState(() {
+                    _workTools = WorkToolsAccess(
+                      workEmail: _workTools.workEmail,
+                      hrisProfileCreated: value,
+                      systemAccessGranted: _workTools.systemAccessGranted,
+                      issuedEquipment: _workTools.issuedEquipment,
+                    );
+                  });
+                },
+                activeThumbColor: const Color(0xFF1A237E),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // System Access Status
+            Card(
+              child: SwitchListTile(
+                title: const Text('Access to Internal Systems Granted'),
+                subtitle: const Text('Have you been given access to required systems?'),
+                value: _workTools.systemAccessGranted,
+                onChanged: (value) {
+                  setState(() {
+                    _workTools = WorkToolsAccess(
+                      workEmail: _workTools.workEmail,
+                      hrisProfileCreated: _workTools.hrisProfileCreated,
+                      systemAccessGranted: value,
+                      issuedEquipment: _workTools.issuedEquipment,
+                    );
+                  });
+                },
+                activeThumbColor: const Color(0xFF1A237E),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            const Text(
+              'Issued Equipment',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Track laptops, phones, PPE, and other issued items',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            
+            // Issued Equipment List
+            ..._workTools.issuedEquipment.asMap().entries.map((entry) {
+              final equipment = entry.value;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.devices, color: Color(0xFF1A237E)),
+                  title: Text(equipment.itemName),
+                  subtitle: Text('S/N: ${equipment.serialNumber}${equipment.issuedDate != null ? '\nIssued: ${DateFormat('dd/MM/yyyy').format(equipment.issuedDate!)}' : ''}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      setState(() {
+                        final newList = List<IssuedEquipment>.from(_workTools.issuedEquipment);
+                        newList.removeAt(entry.key);
+                        _workTools = WorkToolsAccess(
+                          workEmail: _workTools.workEmail,
+                          hrisProfileCreated: _workTools.hrisProfileCreated,
+                          systemAccessGranted: _workTools.systemAccessGranted,
+                          issuedEquipment: newList,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }),
+            
+            // Add Equipment Button
+            ElevatedButton.icon(
+              onPressed: () => _showAddEquipmentDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Issued Equipment'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _getBeneficiaryTotalPercentage() {
+    return _benefitsInsurance.beneficiaries.fold(
+      0.0,
+      (sum, beneficiary) => sum + beneficiary.percentage,
+    );
+  }
+
+  Future<void> _uploadDocument(String docType, Function(String) onUploadComplete) async {
+    try {
+      _logger.i('Starting document upload for type: $docType');
+      
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        _logger.d('File selected: ${file.name} (${file.size} bytes)');
+        
+        if (!_validateFileSize(file)) {
+          _logger.w('File size validation failed');
+          return;
+        }
+
+        setState(() {
+          _isUploadingFile = true;
+        });
+
+        _logger.i('Uploading file to storage...');
+        
+        // CORRECTED: Use uploadEmployeeDocument with named parameters
+        final downloadUrl = await _storageService.uploadEmployeeDocument(
+          employeeName: _personalInfo.fullName.isNotEmpty 
+              ? _personalInfo.fullName 
+              : 'temp_${DateTime.now().millisecondsSinceEpoch}',
+          fieldName: docType,
+          file: file,
+        );
+        
+        _logger.i('File uploaded successfully. URL: $downloadUrl');
+        onUploadComplete(downloadUrl);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('File uploaded successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        _logger.d('File selection cancelled by user');
+      }
+    } catch (e) {
+      _logger.e('Error uploading file', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingFile = false;
+        });
+      }
+    }
+  }
+
+  void _showAddProfessionalRegistrationDialog() {
+    final bodyController = TextEditingController();
+    final numberController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Professional Registration'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: bodyController,
+              decoration: const InputDecoration(
+                labelText: 'Registration Body (e.g., EBK, ICPAK)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: numberController,
+              decoration: const InputDecoration(
+                labelText: 'Registration Number',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (bodyController.text.isNotEmpty && numberController.text.isNotEmpty) {
+                setState(() {
+                  final newMap = Map<String, String>.from(_academicDocs.professionalRegistrations);
+                  newMap[bodyController.text] = numberController.text;
+                  _academicDocs = AcademicDocuments(
+                    academicCertificates: _academicDocs.academicCertificates,
+                    professionalCertificates: _academicDocs.professionalCertificates,
+                    professionalRegistrations: newMap,
+                  );
+                });
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A237E),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddDependantDialog() {
+    final nameController = TextEditingController();
+    final relationshipController = TextEditingController();
+    DateTime? selectedDate;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add NHIF Dependant'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: relationshipController,
+                  decoration: const InputDecoration(
+                    labelText: 'Relationship',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      setDialogState(() {
+                        selectedDate = date;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Date of Birth',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      selectedDate != null
+                          ? DateFormat('dd/MM/yyyy').format(selectedDate!)
+                          : 'Select date',
+                      style: TextStyle(
+                        color: selectedDate != null ? Colors.black : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameController.text.isNotEmpty && relationshipController.text.isNotEmpty) {
+                  setState(() {
+                    final newList = List<Dependant>.from(_benefitsInsurance.nhifDependants);
+                    newList.add(Dependant(
+                      name: nameController.text,
+                      relationship: relationshipController.text,
+                      dateOfBirth: selectedDate,
+                    ));
+                    _benefitsInsurance = BenefitsInsurance(
+                      nhifDependants: newList,
+                      medicalInsuranceFormUrl: _benefitsInsurance.medicalInsuranceFormUrl,
+                      beneficiaries: _benefitsInsurance.beneficiaries,
+                    );
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddBeneficiaryDialog() {
+    final nameController = TextEditingController();
+    final relationshipController = TextEditingController();
+    final contactController = TextEditingController();
+    final percentageController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Beneficiary'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: relationshipController,
+                decoration: const InputDecoration(
+                  labelText: 'Relationship',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contactController,
+                decoration: const InputDecoration(
+                  labelText: 'Contact Number',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: percentageController,
+                decoration: const InputDecoration(
+                  labelText: 'Percentage (%)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty && 
+                  relationshipController.text.isNotEmpty &&
+                  contactController.text.isNotEmpty &&
+                  percentageController.text.isNotEmpty) {
+                final percentage = double.tryParse(percentageController.text) ?? 0;
+                final currentTotal = _getBeneficiaryTotalPercentage();
+                
+                if (currentTotal + percentage > 100) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Total percentage cannot exceed 100%'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+                
+                setState(() {
+                  final newList = List<Beneficiary>.from(_benefitsInsurance.beneficiaries);
+                  newList.add(Beneficiary(
+                    name: nameController.text,
+                    relationship: relationshipController.text,
+                    contact: contactController.text,
+                    percentage: percentage,
+                  ));
+                  _benefitsInsurance = BenefitsInsurance(
+                    nhifDependants: _benefitsInsurance.nhifDependants,
+                    medicalInsuranceFormUrl: _benefitsInsurance.medicalInsuranceFormUrl,
+                    beneficiaries: newList,
+                  );
+                });
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A237E),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddEquipmentDialog() {
+    final itemNameController = TextEditingController();
+    final serialNumberController = TextEditingController();
+    DateTime? issuedDate;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Issued Equipment'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: itemNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Item Name (e.g., Laptop, Phone)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: serialNumberController,
+                  decoration: const InputDecoration(
+                    labelText: 'Serial Number',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      setDialogState(() {
+                        issuedDate = date;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Issue Date',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      issuedDate != null
+                          ? DateFormat('dd/MM/yyyy').format(issuedDate!)
+                          : 'Select date',
+                      style: TextStyle(
+                        color: issuedDate != null ? Colors.black : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (itemNameController.text.isNotEmpty && serialNumberController.text.isNotEmpty) {
+                  setState(() {
+                    final newList = List<IssuedEquipment>.from(_workTools.issuedEquipment);
+                    newList.add(IssuedEquipment(
+                      itemName: itemNameController.text,
+                      serialNumber: serialNumberController.text,
+                      issuedDate: issuedDate,
+                    ));
+                    _workTools = WorkToolsAccess(
+                      workEmail: _workTools.workEmail,
+                      hrisProfileCreated: _workTools.hrisProfileCreated,
+                      systemAccessGranted: _workTools.systemAccessGranted,
+                      issuedEquipment: newList,
+                    );
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Add'),
+            ),
           ],
         ),
       ),

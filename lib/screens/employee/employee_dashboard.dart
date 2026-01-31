@@ -109,288 +109,319 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
+/// UPDATED METHOD - Replace the existing _buildApplicationsList() method with this
   Widget _buildApplicationsList() {
     _logger.d('Building applications list stream');
+    _logger.i('Querying both Draft and EmployeeDetails collections');
+    
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
-          .collection('employee_onboarding')
+          .collection('Draft')
           .orderBy('createdAt', descending: true)
           .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          _logger.e('Error loading applications stream', error: snapshot.error);
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-                const SizedBox(height: 16),
-                Text(
-                  'Error loading applications',
-                  style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  snapshot.error.toString(),
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
+      builder: (context, draftSnapshot) {
+        // Log draft collection status
+        if (draftSnapshot.hasError) {
+          _logger.e('Error loading Draft collection', error: draftSnapshot.error);
         }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          _logger.d('Waiting for applications stream data...');
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+        
+        if (draftSnapshot.connectionState == ConnectionState.waiting) {
+          _logger.d('Waiting for Draft collection data...');
+        } else if (draftSnapshot.hasData) {
+          _logger.d('Draft collection loaded: ${draftSnapshot.data?.docs.length ?? 0} documents');
         }
-
-        final applications = snapshot.data?.docs ?? [];
-        _logger.i('Loaded ${applications.length} application(s) from Firestore');
-
-        if (applications.isEmpty) {
-          _logger.d('No applications found, showing empty state');
-          return _buildEmptyState();
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(24),
-          itemCount: applications.length,
-          itemBuilder: (context, index) {
-            final doc = applications[index];
-            _logger.d('Building application card for document ID: ${doc.id}');
-            try {
-              final data = doc.data() as Map<String, dynamic>;
-              final employee = EmployeeOnboarding.fromMap(data);
-              _logger.d('Successfully parsed employee data for: ${employee.personalInfo.fullName}');
-              
-              return _buildApplicationCard(employee, doc.id);
-            } catch (e, stackTrace) {
-              _logger.e('Error parsing application document ${doc.id}', error: e, stackTrace: stackTrace);
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text('Error loading application: $e'),
+        
+        return StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('EmployeeDetails')
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+          builder: (context, submittedSnapshot) {
+            // Log submitted collection status
+            if (submittedSnapshot.hasError) {
+              _logger.e('Error loading EmployeeDetails collection', error: submittedSnapshot.error);
+            }
+            
+            if (submittedSnapshot.connectionState == ConnectionState.waiting) {
+              _logger.d('Waiting for EmployeeDetails collection data...');
+            } else if (submittedSnapshot.hasData) {
+              _logger.d('EmployeeDetails collection loaded: ${submittedSnapshot.data?.docs.length ?? 0} documents');
+            }
+            
+            // Handle errors from either stream
+            if (draftSnapshot.hasError && submittedSnapshot.hasError) {
+              _logger.e('Both collections failed to load');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading applications',
+                      style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Please check your permissions or try again later',
+                      style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        _logger.i('Retry button clicked - rebuilding widget');
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1A237E),
+                      ),
+                    ),
+                  ],
                 ),
               );
             }
+
+            // Show loading if either stream is still loading
+            if (draftSnapshot.connectionState == ConnectionState.waiting ||
+                submittedSnapshot.connectionState == ConnectionState.waiting) {
+              _logger.d('Still waiting for data...');
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            // Combine data from both collections
+            final List<QueryDocumentSnapshot> allApplications = [];
+            
+            if (draftSnapshot.hasData) {
+              allApplications.addAll(draftSnapshot.data!.docs);
+              _logger.d('Added ${draftSnapshot.data!.docs.length} drafts');
+            }
+            
+            if (submittedSnapshot.hasData) {
+              allApplications.addAll(submittedSnapshot.data!.docs);
+              _logger.d('Added ${submittedSnapshot.data!.docs.length} submitted applications');
+            }
+            
+            // Sort by creation date (most recent first)
+            allApplications.sort((a, b) {
+              final aData = a.data() as Map<String, dynamic>;
+              final bData = b.data() as Map<String, dynamic>;
+              final aTimestamp = aData['createdAt'] as Timestamp?;
+              final bTimestamp = bData['createdAt'] as Timestamp?;
+              
+              if (aTimestamp == null || bTimestamp == null) return 0;
+              return bTimestamp.compareTo(aTimestamp); // Descending order
+            });
+            
+            _logger.i('Total applications loaded: ${allApplications.length}');
+
+            if (allApplications.isEmpty) {
+              _logger.w('No applications found in both collections');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.folder_open, size: 64, color: Colors.grey.shade300),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No applications yet',
+                      style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Click the button below to start your onboarding',
+                      style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(24),
+              itemCount: allApplications.length,
+              itemBuilder: (context, index) {
+                final doc = allApplications[index];
+                final data = doc.data() as Map<String, dynamic>;
+                final status = data['status'] ?? 'draft';
+                
+                _logger.d('Rendering application ${index + 1}: ${data['personalInfo']?['fullName'] ?? 'Unknown'} (Status: $status)');
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      _logger.i('Application card clicked: ${doc.id}');
+                      _logger.d('Opening application with status: $status');
+                      _openApplication(doc.id, status);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      data['personalInfo']?['fullName'] ?? 'Application',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1A237E),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      data['employmentDetails']?['jobTitle'] ?? 'Position not specified',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _buildStatusBadge(status),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Created: ${_formatDate(data['createdAt'])}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+                              if (data['updatedAt'] != null) ...[
+                                Icon(Icons.update, size: 16, color: Colors.grey.shade600),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Updated: ${_formatDate(data['updatedAt'])}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (status == 'submitted' && data['submittedAt'] != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.send, size: 16, color: Colors.grey.shade600),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Submitted: ${_formatDate(data['submittedAt'])}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
           },
         );
       },
     );
   }
 
-  Widget _buildEmptyState() {
-    _logger.d('Building empty state widget');
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.description_outlined,
-            size: 120,
-            color: Colors.grey.shade300,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No Applications Yet',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Click the button below to start your\nonboarding application',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: () => _startNewApplication(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            icon: const Icon(Icons.add_circle_outline),
-            label: const Text(
-              'Start New Application',
-              style: TextStyle(fontSize: 16),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return 'N/A';
+    try {
+      final date = (timestamp as Timestamp).toDate();
+      return DateFormat('MMM dd, yyyy').format(date);
+    } catch (e) {
+      _logger.w('Error formatting date', error: e);
+      return 'Invalid date';
+    }
   }
 
-  Widget _buildApplicationCard(EmployeeOnboarding employee, String docId) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
+  void _openApplication(String docId, String status) {
+    _logger.i('Opening application: $docId (Status: $status)');
     
-    // Calculate completion percentage
-    int completedSections = 0;
-    int totalSections = 8;
+    // Determine which collection to query based on status
+    final collection = status == 'draft' ? 'Draft' : 'EmployeeDetails';
+    _logger.d('Fetching from $collection collection');
     
-    if (employee.personalInfo.fullName.isNotEmpty) completedSections++;
-    if (employee.employmentDetails.jobTitle.isNotEmpty) completedSections++;
-    if (employee.statutoryDocs.kraPinNumber.isNotEmpty) completedSections++;
-    if (employee.payrollDetails.basicSalary > 0) completedSections++;
-    if (employee.academicDocs.academicCertificates.isNotEmpty) completedSections++;
-    if (employee.contractsForms.codeOfConductAcknowledged) completedSections++;
-    if (employee.benefitsInsurance.beneficiaries.isNotEmpty) completedSections++;
-    if (employee.workTools.workEmail != null) completedSections++;
-    
-    final completionPercentage = (completedSections / totalSections * 100).round();
-    
-    _logger.d('Application card for ${employee.personalInfo.fullName}: '
-        'Status=${employee.status}, Completion=$completionPercentage%, DocID=$docId');
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () => _viewOrEditApplication(employee, docId),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header row
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          employee.personalInfo.fullName.isNotEmpty
-                              ? employee.personalInfo.fullName
-                              : 'Untitled Application',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A237E),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          employee.employmentDetails.jobTitle.isNotEmpty
-                              ? employee.employmentDetails.jobTitle
-                              : 'No job title',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildStatusBadge(employee.status),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Progress bar
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Completion',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      Text(
-                        '$completionPercentage%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1A237E),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: completionPercentage / 100,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Color(0xFF1A237E),
-                      ),
-                      minHeight: 8,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Metadata row
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _buildInfoChip(
-                    Icons.calendar_today,
-                    'Created: ${dateFormat.format(employee.createdAt)}',
-                  ),
-                  if (employee.submittedAt != null)
-                    _buildInfoChip(
-                      Icons.send,
-                      'Submitted: ${dateFormat.format(employee.submittedAt!)}',
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Action button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _viewOrEditApplication(employee, docId),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: employee.status == 'draft'
-                        ? const Color(0xFF1A237E)
-                        : Colors.grey.shade700,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  icon: Icon(
-                    employee.status == 'draft' ? Icons.edit : Icons.visibility,
-                  ),
-                  label: Text(
-                    employee.status == 'draft'
-                        ? 'Continue Editing'
-                        : 'View Application',
-                  ),
-                ),
-              ),
-            ],
+    // Fetch the full document data
+    _firestore.collection(collection).doc(docId).get().then((docSnapshot) {
+      // ✅ CHECK IF WIDGET IS STILL MOUNTED BEFORE USING CONTEXT
+      if (!mounted) {
+        _logger.w('Widget disposed before document fetch completed');
+        return;
+      }
+      
+      if (!docSnapshot.exists) {
+        _logger.e('Document not found: $docId in $collection');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Application not found'),
+            backgroundColor: Colors.red,
           ),
+        );
+        return;
+      }
+      
+      try {
+        final data = docSnapshot.data() as Map<String, dynamic>;
+        final employee = EmployeeOnboarding.fromMap(data);
+        _logger.i('Successfully loaded employee data for: ${employee.personalInfo.fullName}');
+        
+        // Use the existing _viewOrEditApplication method
+        _viewOrEditApplication(employee, docId);
+      } catch (e, stackTrace) {
+        _logger.e('Error parsing employee data', error: e, stackTrace: stackTrace);
+        
+        // ✅ CHECK IF WIDGET IS STILL MOUNTED BEFORE SHOWING SNACKBAR
+        if (!mounted) return;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading application: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }).catchError((error) {
+      _logger.e('Error fetching document', error: error);
+      
+      // ✅ CHECK IF WIDGET IS STILL MOUNTED BEFORE SHOWING SNACKBAR
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading application: $error'),
+          backgroundColor: Colors.red,
         ),
-      ),
-    );
+      );
+    });
   }
 
   Widget _buildStatusBadge(String status) {
@@ -442,23 +473,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoChip(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: Colors.grey.shade600),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
     );
   }
 

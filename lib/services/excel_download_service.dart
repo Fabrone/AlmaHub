@@ -2,45 +2,26 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
-// For web: import 'package:universal_html/html.dart' as html;
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:open_file/open_file.dart';
+
+// Web-specific imports (conditional)
+import 'excel_download_service_stub.dart'
+    if (dart.library.html) 'excel_download_service_web.dart';
 
 /// Service to handle Excel file downloads across web and mobile platforms
 class ExcelDownloadService {
   /// Download Excel file with platform-specific handling
-  /// Returns the file path (mobile) or triggers download (web)
+  /// Returns the file path (mobile) or success message (web)
   static Future<String> downloadExcel(
     Uint8List fileBytes,
     String fileName,
   ) async {
     if (kIsWeb) {
-      return await _downloadForWeb(fileBytes, fileName);
+      return await downloadForWeb(fileBytes, fileName);
     } else {
       return await _downloadForMobile(fileBytes, fileName);
-    }
-  }
-
-  /// Download for web platform
-  static Future<String> _downloadForWeb(
-    Uint8List fileBytes,
-    String fileName,
-  ) async {
-    try {
-      // For web, we need to use universal_html package
-      // Uncomment when universal_html is added to pubspec.yaml
-      
-      /* 
-      final blob = html.Blob([fileBytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', fileName)
-        ..click();
-      html.Url.revokeObjectUrl(url);
-      */
-      
-      // Temporary placeholder - will work when universal_html is added
-      return 'Downloaded: $fileName (Web platform - add universal_html package)';
-    } catch (e) {
-      throw Exception('Failed to download file on web: $e');
     }
   }
 
@@ -50,26 +31,17 @@ class ExcelDownloadService {
     String fileName,
   ) async {
     try {
-      // Get the downloads directory
-      Directory? directory;
+      // Request storage permissions
+      final hasPermission = await _requestStoragePermission();
       
-      if (Platform.isAndroid) {
-        // For Android, use external storage
-        directory = Directory('/storage/emulated/0/Download');
-        if (!await directory.exists()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else if (Platform.isIOS) {
-        // For iOS, use documents directory
-        directory = await getApplicationDocumentsDirectory();
-      } else {
-        // For desktop platforms
-        directory = await getDownloadsDirectory();
+      if (!hasPermission) {
+        throw Exception(
+          'Storage permission denied. Please enable storage access in Settings.'
+        );
       }
 
-      if (directory == null) {
-        throw Exception('Could not access downloads directory');
-      }
+      // Get the downloads directory
+      final directory = await _getDownloadDirectory();
 
       // Create the file
       final file = File('${directory.path}/$fileName');
@@ -81,6 +53,87 @@ class ExcelDownloadService {
     }
   }
 
+  /// Request storage permissions based on Android version
+  static Future<bool> _requestStoragePermission() async {
+    if (!Platform.isAndroid) {
+      // iOS doesn't need permission for app documents
+      return true;
+    }
+
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    final sdkInt = androidInfo.version.sdkInt;
+    
+    if (sdkInt >= 33) {
+      // Android 13+: No permission needed for app-specific directories
+      return true;
+    } else if (sdkInt >= 30) {
+      // Android 11-12: Check for storage permission
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+      }
+      return status.isGranted;
+    } else {
+      // Android 10 and below
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+      }
+      return status.isGranted;
+    }
+  }
+
+  /// Get the correct download directory based on platform
+  static Future<Directory> _getDownloadDirectory() async {
+    if (Platform.isAndroid) {
+      // Use app-specific external storage (doesn't require special permissions on Android 11+)
+      final directory = await getExternalStorageDirectory();
+      
+      if (directory != null) {
+        // Create AlmaHub/Downloads folder in app-specific directory
+        final almaHubDir = Directory('${directory.path}/AlmaHub/Downloads');
+        if (!await almaHubDir.exists()) {
+          await almaHubDir.create(recursive: true);
+        }
+        return almaHubDir;
+      }
+      
+      // Fallback to internal storage
+      final appDir = await getApplicationDocumentsDirectory();
+      final almaHubDir = Directory('${appDir.path}/AlmaHub/Downloads');
+      if (!await almaHubDir.exists()) {
+        await almaHubDir.create(recursive: true);
+      }
+      return almaHubDir;
+    } else if (Platform.isIOS) {
+      // iOS: Use documents directory
+      final directory = await getApplicationDocumentsDirectory();
+      final almaHubDir = Directory('${directory.path}/AlmaHub/Downloads');
+      if (!await almaHubDir.exists()) {
+        await almaHubDir.create(recursive: true);
+      }
+      return almaHubDir;
+    } else {
+      // Desktop platforms (Windows, macOS, Linux)
+      final directory = await getDownloadsDirectory();
+      if (directory != null) {
+        final almaHubDir = Directory('${directory.path}/AlmaHub');
+        if (!await almaHubDir.exists()) {
+          await almaHubDir.create(recursive: true);
+        }
+        return almaHubDir;
+      }
+      
+      // Fallback to documents directory
+      final appDir = await getApplicationDocumentsDirectory();
+      final almaHubDir = Directory('${appDir.path}/AlmaHub/Downloads');
+      if (!await almaHubDir.exists()) {
+        await almaHubDir.create(recursive: true);
+      }
+      return almaHubDir;
+    }
+  }
+
   /// Open the downloaded file (mobile only)
   static Future<void> openFile(String filePath) async {
     if (kIsWeb) {
@@ -89,15 +142,10 @@ class ExcelDownloadService {
     }
 
     try {
-      // Use open_file package
-      // Uncomment when open_file is added to pubspec.yaml
-      
-      /*
       final result = await OpenFile.open(filePath);
       if (result.type != ResultType.done) {
         throw Exception('Could not open file: ${result.message}');
       }
-      */
     } catch (e) {
       throw Exception('Failed to open file: $e');
     }

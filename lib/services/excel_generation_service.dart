@@ -1,5 +1,4 @@
-import 'dart:io';
-//import 'dart:typed_data';
+import 'dart:typed_data';
 import 'package:almahub/models/employee_onboarding_models.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -10,20 +9,62 @@ class ExcelGenerationService {
   static Future<Map<String, dynamic>> generateEmployeeOnboardingExcel(
     List<EmployeeOnboarding> employees,
   ) async {
-    final excel = Excel.createExcel();
-    final sheet = excel['Employee Onboarding Data'];
+    try {
+      final excel = Excel.createExcel();
+      
+      // Remove default sheet if it exists
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+      
+      // Add summary sheet first
+      addSummarySheet(excel, employees);
+      
+      // Create main data sheet
+      final sheet = excel['Employee Onboarding Data'];
 
-    // Set column widths for better readability
-    sheet.setColumnWidth(0, 5.0);  // ID column
-    sheet.setColumnWidth(1, 25.0); // Full Name
-    sheet.setColumnWidth(2, 20.0); // National ID
-    sheet.setColumnWidth(3, 15.0); // Date of Birth
-    sheet.setColumnWidth(4, 12.0); // Gender
-    sheet.setColumnWidth(5, 18.0); // Phone
-    sheet.setColumnWidth(6, 25.0); // Email
-    sheet.setColumnWidth(7, 30.0); // Address
-    sheet.setColumnWidth(8, 20.0); // Next of Kin
-    sheet.setColumnWidth(9, 20.0); // Job Title
+      // Set column widths for better readability
+      _setupColumnWidths(sheet);
+
+      // Add header row with styling
+      _addHeaderRow(sheet);
+
+      // Add data rows
+      _addDataRows(sheet, employees);
+
+      // Generate filename with timestamp
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final fileName = 'AlmaHub_Employee_Onboarding_$timestamp.xlsx';
+      
+      // Encode to bytes
+      final bytes = excel.encode();
+      
+      if (bytes == null) {
+        throw Exception('Failed to encode Excel file');
+      }
+      
+      return {
+        'fileName': fileName,
+        'fileBytes': Uint8List.fromList(bytes),
+        'fileSize': bytes.length,
+      };
+    } catch (e) {
+      throw Exception('Excel generation failed: $e');
+    }
+  }
+
+  /// Set up column widths
+  static void _setupColumnWidths(Sheet sheet) {
+    sheet.setColumnWidth(0, 5.0);   // ID column
+    sheet.setColumnWidth(1, 25.0);  // Full Name
+    sheet.setColumnWidth(2, 20.0);  // National ID
+    sheet.setColumnWidth(3, 15.0);  // Date of Birth
+    sheet.setColumnWidth(4, 12.0);  // Gender
+    sheet.setColumnWidth(5, 18.0);  // Phone
+    sheet.setColumnWidth(6, 25.0);  // Email
+    sheet.setColumnWidth(7, 30.0);  // Address
+    sheet.setColumnWidth(8, 20.0);  // Next of Kin
+    sheet.setColumnWidth(9, 20.0);  // Job Title
     sheet.setColumnWidth(10, 18.0); // Department
     sheet.setColumnWidth(11, 15.0); // Employment Type
     sheet.setColumnWidth(12, 15.0); // Start Date
@@ -40,13 +81,40 @@ class ExcelGenerationService {
     sheet.setColumnWidth(23, 25.0); // Work Email
     sheet.setColumnWidth(24, 15.0); // Status
     sheet.setColumnWidth(25, 18.0); // Submitted Date
+    sheet.setColumnWidth(26, 25.0); // Postal Address
+    sheet.setColumnWidth(27, 18.0); // Working Hours
+    sheet.setColumnWidth(28, 20.0); // Work Location
+    sheet.setColumnWidth(29, 25.0); // Professional Registrations
+    sheet.setColumnWidth(30, 25.0); // Academic Certificates
+    sheet.setColumnWidth(31, 25.0); // Professional Certificates
+    sheet.setColumnWidth(32, 15.0); // Contract Signed
+    sheet.setColumnWidth(33, 15.0); // NDA Signed
+    sheet.setColumnWidth(34, 20.0); // Code of Conduct
+    sheet.setColumnWidth(35, 20.0); // Data Protection
+    sheet.setColumnWidth(36, 25.0); // NHIF Dependants
+    sheet.setColumnWidth(37, 25.0); // Beneficiaries
+    sheet.setColumnWidth(38, 25.0); // Issued Equipment
+    sheet.setColumnWidth(39, 18.0); // HRIS Profile
+    sheet.setColumnWidth(40, 18.0); // System Access
+    sheet.setColumnWidth(41, 18.0); // Housing Allowance
+    sheet.setColumnWidth(42, 18.0); // Transport Allowance
+    sheet.setColumnWidth(43, 18.0); // Other Allowances
+    sheet.setColumnWidth(44, 18.0); // Loans Deduction
+    sheet.setColumnWidth(45, 18.0); // SACCO Deduction
+    sheet.setColumnWidth(46, 18.0); // Advance Deduction
+    sheet.setColumnWidth(47, 20.0); // Bank Branch
+    sheet.setColumnWidth(48, 20.0); // M-Pesa Name
+  }
 
-    // Header Row with styling
+  /// Add header row with styling
+  static void _addHeaderRow(Sheet sheet) {
     final headerStyle = CellStyle(
       backgroundColorHex: ExcelColor.fromHexString('#1A237E'),
       fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
       bold: true,
       fontSize: 11,
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
     );
 
     final headers = [
@@ -91,12 +159,12 @@ class ExcelGenerationService {
       'Issued Equipment',
       'HRIS Profile Created',
       'System Access Granted',
-      'Housing Allowance',
-      'Transport Allowance',
-      'Other Allowances',
-      'Loans Deduction',
-      'SACCO Deduction',
-      'Advance Deduction',
+      'Housing Allowance (KES)',
+      'Transport Allowance (KES)',
+      'Other Allowances (KES)',
+      'Loans Deduction (KES)',
+      'SACCO Deduction (KES)',
+      'Advance Deduction (KES)',
       'Bank Branch',
       'M-Pesa Name',
     ];
@@ -108,9 +176,15 @@ class ExcelGenerationService {
       cell.cellStyle = headerStyle;
     }
 
-    // Data Rows
+    // Set header row height
+    sheet.setRowHeight(0, 25);
+  }
+
+  /// Add data rows
+  static void _addDataRows(Sheet sheet, List<EmployeeOnboarding> employees) {
     final dataStyle = CellStyle(
       fontSize: 10,
+      verticalAlign: VerticalAlign.Center,
     );
 
     final dateFormat = DateFormat('dd/MM/yyyy');
@@ -144,7 +218,7 @@ class ExcelGenerationService {
         employee.personalInfo.nationalIdOrPassport,
         employee.personalInfo.dateOfBirth != null
             ? dateFormat.format(employee.personalInfo.dateOfBirth!)
-            : '',
+            : '-',
         employee.personalInfo.gender,
         employee.personalInfo.phoneNumber,
         employee.personalInfo.email,
@@ -155,7 +229,7 @@ class ExcelGenerationService {
         employee.employmentDetails.employmentType,
         employee.employmentDetails.startDate != null
             ? dateFormat.format(employee.employmentDetails.startDate!)
-            : '',
+            : '-',
         employee.employmentDetails.supervisorName,
         employee.statutoryDocs.kraPinNumber,
         employee.statutoryDocs.nssfNumber,
@@ -163,14 +237,14 @@ class ExcelGenerationService {
         currencyFormat.format(employee.payrollDetails.basicSalary),
         formatMoneyMap(employee.payrollDetails.allowances),
         formatMoneyMap(employee.payrollDetails.deductions),
-        employee.payrollDetails.bankDetails?.bankName ?? '',
-        employee.payrollDetails.bankDetails?.accountNumber ?? '',
-        employee.payrollDetails.mpesaDetails?.phoneNumber ?? '',
-        employee.workTools.workEmail ?? '',
+        employee.payrollDetails.bankDetails?.bankName ?? '-',
+        employee.payrollDetails.bankDetails?.accountNumber ?? '-',
+        employee.payrollDetails.mpesaDetails?.phoneNumber ?? '-',
+        employee.workTools.workEmail ?? '-',
         employee.status.toUpperCase(),
         employee.submittedAt != null
             ? dateFormat.format(employee.submittedAt!)
-            : '',
+            : '-',
         employee.personalInfo.postalAddress,
         employee.employmentDetails.workingHours,
         employee.employmentDetails.workLocation,
@@ -210,8 +284,8 @@ class ExcelGenerationService {
         currencyFormat.format(getDeduction(employee.payrollDetails.deductions, 'loans')),
         currencyFormat.format(getDeduction(employee.payrollDetails.deductions, 'sacco')),
         currencyFormat.format(getDeduction(employee.payrollDetails.deductions, 'advance')),
-        employee.payrollDetails.bankDetails?.branch ?? '',
-        employee.payrollDetails.mpesaDetails?.name ?? '',
+        employee.payrollDetails.bankDetails?.branch ?? '-',
+        employee.payrollDetails.mpesaDetails?.name ?? '-',
       ];
 
       for (int colIndex = 0; colIndex < rowData.length; colIndex++) {
@@ -232,24 +306,6 @@ class ExcelGenerationService {
         cell.cellStyle = dataStyle;
       }
     }
-
-    // Freeze header row
-    sheet.setRowHeight(0, 25);
-
-    // Auto-filter on header row
-    // Note: Excel package may not support this directly, but we set it up for manual use
-
-    // Generate file
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final fileName = 'AlmaHub_Employee_Onboarding_$timestamp.xlsx';
-    
-    // Encode to bytes
-    final bytes = excel.encode();
-    
-    return {
-      'fileName': fileName,
-      'fileBytes': bytes,
-    };
   }
 
   /// Generate a summary statistics sheet
@@ -270,6 +326,7 @@ class ExcelGenerationService {
     final submitted = employees.where((e) => e.status == 'submitted').length;
     final approved = employees.where((e) => e.status == 'approved').length;
     final drafts = employees.where((e) => e.status == 'draft').length;
+    final rejected = employees.where((e) => e.status == 'rejected').length;
 
     final stats = [
       ['', ''],
@@ -277,15 +334,19 @@ class ExcelGenerationService {
       ['Submitted:', submitted],
       ['Approved:', approved],
       ['Drafts:', drafts],
+      ['Rejected:', rejected],
       ['', ''],
       ['Report Generated:', DateFormat('dd MMMM yyyy HH:mm').format(DateTime.now())],
     ];
+
+    final labelStyle = CellStyle(bold: true, fontSize: 11);
+    final valueStyle = CellStyle(fontSize: 11);
 
     for (int i = 0; i < stats.length; i++) {
       final labelCell = summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: i + 2));
       final labelValue = stats[i][0];
       labelCell.value = TextCellValue(labelValue.toString());
-      labelCell.cellStyle = CellStyle(bold: true);
+      labelCell.cellStyle = labelStyle;
 
       final valueCell = summarySheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: i + 2));
       final cellValue = stats[i][1];
@@ -294,19 +355,10 @@ class ExcelGenerationService {
       } else {
         valueCell.value = TextCellValue(cellValue.toString());
       }
+      valueCell.cellStyle = valueStyle;
     }
 
     summarySheet.setColumnWidth(0, 25.0);
     summarySheet.setColumnWidth(1, 20.0);
-  }
-
-  /// Save Excel file bytes (for mobile/desktop)
-  static Future<File> saveExcelFile(List<int> fileBytes, String fileName) async {
-    // For web, you would use different approach
-    // For desktop/mobile:
-    final directory = Directory.current.path;
-    final file = File('$directory/$fileName');
-    await file.writeAsBytes(fileBytes);
-    return file;
   }
 }
