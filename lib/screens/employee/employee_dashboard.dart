@@ -2,6 +2,7 @@ import 'package:almahub/models/employee_onboarding_models.dart';
 import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ✅ ADD THIS IMPORT
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 
@@ -109,12 +110,34 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
-/// UPDATED METHOD - Replace the existing _buildApplicationsList() method with this
   Widget _buildApplicationsList() {
     _logger.d('Building applications list stream');
-    _logger.i('Querying both Draft and EmployeeDetails collections');
+    
+    // ✅ Get current user's UID
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
+    if (currentUser == null) {
+      _logger.e('No authenticated user found');
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              'Please log in to view your applications',
+              style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    final uid = currentUser.uid;
+    _logger.i('Querying collections for user UID: $uid');
     
     return StreamBuilder<QuerySnapshot>(
+      // ✅ FIXED: Query ALL drafts, filter client-side
       stream: _firestore
           .collection('Draft')
           .orderBy('createdAt', descending: true)
@@ -128,10 +151,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         if (draftSnapshot.connectionState == ConnectionState.waiting) {
           _logger.d('Waiting for Draft collection data...');
         } else if (draftSnapshot.hasData) {
-          _logger.d('Draft collection loaded: ${draftSnapshot.data?.docs.length ?? 0} documents');
+          _logger.d('Draft collection loaded: ${draftSnapshot.data?.docs.length ?? 0} total documents');
         }
         
         return StreamBuilder<QuerySnapshot>(
+          // ✅ FIXED: Query ALL submitted applications, filter client-side
           stream: _firestore
               .collection('EmployeeDetails')
               .orderBy('createdAt', descending: true)
@@ -145,7 +169,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
             if (submittedSnapshot.connectionState == ConnectionState.waiting) {
               _logger.d('Waiting for EmployeeDetails collection data...');
             } else if (submittedSnapshot.hasData) {
-              _logger.d('EmployeeDetails collection loaded: ${submittedSnapshot.data?.docs.length ?? 0} documents');
+              _logger.d('EmployeeDetails collection loaded: ${submittedSnapshot.data?.docs.length ?? 0} total documents');
             }
             
             // Handle errors from either stream
@@ -193,17 +217,27 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
               );
             }
 
-            // Combine data from both collections
+            // ✅ FILTER CLIENT-SIDE: Only include documents that belong to current user
             final List<QueryDocumentSnapshot> allApplications = [];
             
             if (draftSnapshot.hasData) {
-              allApplications.addAll(draftSnapshot.data!.docs);
-              _logger.d('Added ${draftSnapshot.data!.docs.length} drafts');
+              final userDrafts = draftSnapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return data['uid'] == uid;
+              }).toList();
+              
+              allApplications.addAll(userDrafts);
+              _logger.d('Filtered ${userDrafts.length} drafts for user (from ${draftSnapshot.data!.docs.length} total)');
             }
             
             if (submittedSnapshot.hasData) {
-              allApplications.addAll(submittedSnapshot.data!.docs);
-              _logger.d('Added ${submittedSnapshot.data!.docs.length} submitted applications');
+              final userSubmissions = submittedSnapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return data['uid'] == uid;
+              }).toList();
+              
+              allApplications.addAll(userSubmissions);
+              _logger.d('Filtered ${userSubmissions.length} submissions for user (from ${submittedSnapshot.data!.docs.length} total)');
             }
             
             // Sort by creation date (most recent first)
@@ -217,10 +251,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
               return bTimestamp.compareTo(aTimestamp); // Descending order
             });
             
-            _logger.i('Total applications loaded: ${allApplications.length}');
+            _logger.i('Total applications for current user: ${allApplications.length}');
 
             if (allApplications.isEmpty) {
-              _logger.w('No applications found in both collections');
+              _logger.w('No applications found for current user');
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
