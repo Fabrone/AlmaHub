@@ -58,6 +58,20 @@ class RegistrationScreenState extends State<RegistrationScreen>
     _logger.d('Animation controller initialized and started');
   }
 
+  /// Convert username with spaces to underscore format for document ID
+  String _formatUsernameForDocId(String username) {
+    final formatted = username.trim().replaceAll(' ', '_');
+    _logger.d('Formatted username: "$username" -> "$formatted"');
+    return formatted;
+  }
+
+  /// Validate username format (allows letters, numbers, spaces, and underscores)
+  bool _isValidUsernameFormat(String username) {
+    // Allow letters, numbers, spaces, and underscores
+    final regex = RegExp(r'^[a-zA-Z0-9_ ]+$');
+    return regex.hasMatch(username.trim());
+  }
+
   Future<void> _signUp() async {
     _logger.i('Sign up process initiated');
 
@@ -82,6 +96,10 @@ class RegistrationScreenState extends State<RegistrationScreen>
     }
     _logger.d('Username validated: $username');
 
+    // Convert username to document ID format (spaces to underscores)
+    final usernameDocId = _formatUsernameForDocId(username);
+    _logger.i('Username for document ID: $usernameDocId');
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -89,18 +107,18 @@ class RegistrationScreenState extends State<RegistrationScreen>
     _logger.i('Registration process starting for username: $username');
 
     try {
-      // Check if username already exists
-      _logger.d('Checking if username exists in Firestore: $username');
-      final existingDoc = await FirebaseFirestore.instance
-          .collection('Users')
-          .doc(username)
+      // ✅ ONLY CHECK DRAFT COLLECTION - No Users collection
+      _logger.d('Checking if username exists in Draft collection: $usernameDocId');
+      final existingDraftDoc = await FirebaseFirestore.instance
+          .collection('Draft')
+          .doc(usernameDocId)
           .get();
 
-      if (existingDoc.exists) {
-        _logger.w('Username already exists: $username');
+      if (existingDraftDoc.exists) {
+        _logger.w('Username already exists in Draft: $usernameDocId');
         throw Exception('Username already taken');
       }
-      _logger.d('Username is available: $username');
+      _logger.d('Username is available in Draft collection: $usernameDocId');
 
       // Create user with email and password
       final email = _emailController.text.trim();
@@ -118,21 +136,103 @@ class RegistrationScreenState extends State<RegistrationScreen>
       }
       _logger.d('User UID obtained: ${user.uid}');
 
-      // Create document in 'Users' with ID = username
-      final userData = {
-        'Username': username,
-        'email': email,
-        'uid': user.uid,
-        'role': 'Client',
+      // ✅ CREATE DRAFT DOCUMENT ONLY (with complete structure)
+      final draftData = {
+        'id': usernameDocId,
+        'status': 'draft',
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'submittedAt': null,
+        
+        // Store registration metadata
+        'registrationUsername': username, // Original username with spaces
+        'registrationEmail': email,
+        'uid': user.uid, // Store Firebase Auth UID
+        
+        'personalInfo': {
+          'fullName': '',
+          'nationalIdOrPassport': '',
+          'idDocumentUrl': null,
+          'dateOfBirth': null,
+          'gender': '',
+          'phoneNumber': '',
+          'email': email, // ✅ Pre-fill email from registration
+          'postalAddress': '',
+          'physicalAddress': '',
+          'nextOfKin': {
+            'name': '',
+            'relationship': '',
+            'contact': '',
+          },
+        },
+        'employmentDetails': {
+          'jobTitle': '',
+          'department': '',
+          'employmentType': '',
+          'startDate': null,
+          'workingHours': '',
+          'workLocation': '',
+          'supervisorName': '',
+        },
+        'statutoryDocs': {
+          'kraPinNumber': '',
+          'kraPinCertificateUrl': null,
+          'nssfNumber': '',
+          'nssfConfirmationUrl': null,
+          'nhifNumber': '',
+          'nhifConfirmationUrl': null,
+          'p9FormUrl': null,
+        },
+        'payrollDetails': {
+          'basicSalary': 0.0,
+          'allowances': {},
+          'deductions': {},
+          'bankDetails': {
+            'bankName': '',
+            'branch': '',
+            'accountNumber': '',
+          },
+          'mpesaDetails': {
+            'phoneNumber': '',
+            'name': '',
+          },
+        },
+        'academicDocs': {
+          'academicCertificates': [],
+          'professionalCertificates': [],
+          'professionalRegistrations': {},
+        },
+        'contractsForms': {
+          'employmentContractUrl': null,
+          'employeeInfoFormUrl': null,
+          'ndaUrl': null,
+          'codeOfConductAcknowledged': false,
+          'dataProtectionConsentGiven': false,
+          'consentDate': null,
+        },
+        'benefitsInsurance': {
+          'nhifDependants': [],
+          'medicalInsuranceFormUrl': null,
+          'beneficiaries': [],
+        },
+        'workTools': {
+          'workEmail': null,
+          'hrisProfileCreated': false,
+          'systemAccessGranted': false,
+          'issuedEquipment': [],
+        },
       };
-      _logger.d('Creating Firestore document with data: $userData');
+      
+      _logger.d('Creating Draft document with data');
+      _logger.d('Document ID: $usernameDocId');
+      _logger.d('Username (original): $username');
+      _logger.d('Email: $email');
 
       await FirebaseFirestore.instance
-          .collection('Users')
-          .doc(username)
-          .set(userData);
-      _logger.i('Firestore document created successfully for: $username');
+          .collection('Draft')
+          .doc(usernameDocId)
+          .set(draftData);
+      _logger.i('✅ Draft document created successfully for: $usernameDocId');
 
       if (mounted) {
         _logger.i(
@@ -315,7 +415,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
                             ),
                             const SizedBox(height: 40),
 
-                            // Username field
+                            // Username field - UPDATED to allow spaces
                             TextFormField(
                               controller: _usernameController,
                               style: const TextStyle(color: Colors.white),
@@ -324,13 +424,21 @@ class RegistrationScreenState extends State<RegistrationScreen>
                                 labelStyle: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.9),
                                 ),
-                                hintText: 'Choose a unique username',
+                                hintText: 'Enter your name (spaces allowed)',
                                 hintStyle: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.5),
                                 ),
                                 prefixIcon: const Icon(
                                   Icons.account_circle_outlined,
                                   color: Colors.white70,
+                                ),
+                                suffixIcon: Tooltip(
+                                  message: 'You can use spaces in your username.\nSpaces will be converted to underscores in your profile ID.',
+                                  child: Icon(
+                                    Icons.info_outline,
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    size: 20,
+                                  ),
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -367,10 +475,9 @@ class RegistrationScreenState extends State<RegistrationScreen>
                                 if (value.trim().length < 3) {
                                   return 'Username must be at least 3 characters';
                                 }
-                                if (!RegExp(
-                                  r'^[a-zA-Z0-9_]+$',
-                                ).hasMatch(value.trim())) {
-                                  return 'Only letters, numbers, and underscores allowed';
+                                // Updated validation to allow spaces
+                                if (!_isValidUsernameFormat(value.trim())) {
+                                  return 'Only letters, numbers, spaces, and underscores allowed';
                                 }
                                 return null;
                               },

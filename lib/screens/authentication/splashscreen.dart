@@ -83,13 +83,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     // Start animations
     _logoController.forward();
-    Timer(const Duration(milliseconds: 600), () {
+    Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
         _textController.forward();
         _logger.d('Text animation started');
       }
     });
-    Timer(const Duration(milliseconds: 900), () {
+    Timer(const Duration(milliseconds: 800), () {
       if (mounted) {
         _progressController.repeat();
         _logger.d('Progress animation started');
@@ -115,18 +115,18 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (user != null) {
         _logger.i('User is logged in: ${user.uid}');
         
-        // User is logged in, fetch their data
-        _logger.d('Fetching user document from Firestore');
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('Users')
+        // Check in Draft collection first (for new/in-progress registrations)
+        _logger.d('Checking Draft collection for user with uid: ${user.uid}');
+        final draftQuery = await FirebaseFirestore.instance
+            .collection('Draft')
             .where('uid', isEqualTo: user.uid)
             .limit(1)
             .get();
 
-        if (querySnapshot.docs.isNotEmpty) {
-          final userData = querySnapshot.docs.first.data();
-          final username = querySnapshot.docs.first.id;
-          _logger.i('User data found for: $username, Role: ${userData['role']}');
+        if (draftQuery.docs.isNotEmpty) {
+          final draftData = draftQuery.docs.first.data();
+          final username = draftData['personalInfo']?['fullName'] ?? draftQuery.docs.first.id;
+          _logger.i('User found in Draft collection: $username');
           
           if (mounted) {
             _logger.i('Navigating to RoleSelectionScreen');
@@ -136,17 +136,42 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               ),
             );
           }
-        } else {
-          // User logged in but no data found
-          _logger.w('User authenticated but no document found in Firestore. Signing out.');
-          await FirebaseAuth.instance.signOut();
+          return;
+        }
+        _logger.d('User not found in Draft collection, checking EmployeeDetails');
+
+        // Check in EmployeeDetails collection (for completed profiles)
+        final employeeQuery = await FirebaseFirestore.instance
+            .collection('EmployeeDetails')
+            .where('uid', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+
+        if (employeeQuery.docs.isNotEmpty) {
+          final employeeData = employeeQuery.docs.first.data();
+          final username = employeeData['personalInfo']?['fullName'] ?? employeeQuery.docs.first.id;
+          _logger.i('User found in EmployeeDetails collection: $username');
           
           if (mounted) {
-            _logger.i('Navigating to LoginScreen after signout');
+            _logger.i('Navigating to RoleSelectionScreen');
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              MaterialPageRoute(
+                builder: (context) => const RoleSelectionScreen(),
+              ),
             );
           }
+          return;
+        }
+        
+        // User logged in but no data found in either collection
+        _logger.w('User authenticated but no document found in Draft or EmployeeDetails. Signing out.');
+        await FirebaseAuth.instance.signOut();
+        
+        if (mounted) {
+          _logger.i('Navigating to LoginScreen after signout');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
         }
       } else {
         // No user logged in

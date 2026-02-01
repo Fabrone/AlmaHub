@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EmployeeOnboardingWizard extends StatefulWidget {
   final EmployeeOnboarding? existingEmployee;
@@ -57,6 +59,11 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
 
   String? _draftId;
   bool _isSaving = false;
+  bool _isLoadingUserData = true;
+  
+  // Store registered username and email
+  String? _registeredUsername;
+  String? _registeredEmail;
 
   @override
   void initState() {
@@ -64,7 +71,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     _logger.i('=== EmployeeOnboardingWizard Initialized ===');
     _logger.d('Existing employee data: ${widget.existingEmployee != null ? "YES" : "NO"}');
     _initializeData();
-    _loadExistingData();
+    _loadUserDataFromAuth();  
   }
 
   void _initializeData() {
@@ -83,6 +90,90 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     _benefitsInsurance = BenefitsInsurance();
     _workTools = WorkToolsAccess();
     _logger.d('Default data models initialized successfully');
+  }
+
+  Future<void> _loadUserDataFromAuth() async {
+    _logger.i('Loading user data from Firebase Auth');
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      
+      if (user == null) {
+        _logger.w('No authenticated user found');
+        setState(() {
+          _isLoadingUserData = false;
+        });
+        return;
+      }
+      
+      _logger.d('Authenticated user UID: ${user.uid}');
+      _logger.d('User email: ${user.email}');
+      
+      // ✅ ONLY SEARCH DRAFT COLLECTION - No Users collection
+      _logger.i('Searching for Draft document with email: ${user.email}');
+      final draftQuery = await FirebaseFirestore.instance
+          .collection('Draft')
+          .where('personalInfo.email', isEqualTo: user.email)
+          .limit(1)
+          .get();
+      
+      if (draftQuery.docs.isNotEmpty) {
+        final draftDoc = draftQuery.docs.first;
+        _draftId = draftDoc.id;
+        final draftData = draftDoc.data();
+        
+        _logger.i('Found Draft document: $_draftId');
+        
+        // Extract registered username and email
+        _registeredUsername = draftData['registrationUsername'] as String?;
+        _registeredEmail = draftData['registrationEmail'] as String?;
+        
+        _logger.d('Registered username: $_registeredUsername');
+        _logger.d('Registered email: $_registeredEmail');
+        
+        // Load existing draft data if present
+        if (widget.existingEmployee == null) {
+          _logger.i('Loading draft data from Firestore');
+          final employee = EmployeeOnboarding.fromMap(draftData);
+          
+          setState(() {
+            _personalInfo = employee.personalInfo;
+            _employmentDetails = employee.employmentDetails;
+            _statutoryDocs = employee.statutoryDocs;
+            _payrollDetails = employee.payrollDetails;
+            _academicDocs = employee.academicDocs;
+            _contractsForms = employee.contractsForms;
+            _benefitsInsurance = employee.benefitsInsurance;
+            _workTools = employee.workTools;
+          });
+          
+          _logger.i('Draft data loaded successfully');
+        } else {
+          // Load existing employee data
+          await _loadExistingData();
+        }
+      } else {
+        _logger.w('No Draft document found for user: ${user.email}');
+        
+        // ✅ NO FALLBACK TO USERS COLLECTION - just set empty state
+        _logger.i('Creating new draft with user email pre-filled');
+        setState(() {
+          _personalInfo = PersonalInformation(
+            email: user.email ?? '',
+            nextOfKin: NextOfKin(),
+          );
+          _registeredEmail = user.email;
+        });
+      }
+      
+    } catch (e, stackTrace) {
+      _logger.e('Error loading user data from auth', error: e, stackTrace: stackTrace);
+    } finally {
+      setState(() {
+        _isLoadingUserData = false;
+      });
+      _logger.d('User data loading completed');
+    }
   }
 
   Future<void> _loadExistingData() async {
@@ -141,6 +232,32 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading indicator while fetching user data
+    if (_isLoadingUserData) {
+      return Scaffold(
+        backgroundColor: Colors.grey.shade50,
+        appBar: AppBar(
+          title: const Text(
+            'Employee Onboarding Form',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: const Color(0xFF1A237E),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading your information...'),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -369,8 +486,6 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     
     if (_formKeys[_currentStep].currentState?.validate() ?? false) {
       _logger.i('Step ${_currentStep + 1} validation passed');
-      // REMOVED: Form save here since we're using onChanged for real-time updates
-      // _formKeys[_currentStep].currentState?.save();
       
       if (_currentStep < _totalSteps - 1) {
         setState(() {
@@ -397,7 +512,6 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
 
     try {
       // Validate current form to ensure data is captured
-      // Note: We're not requiring validation to pass for draft saves
       _formKeys[_currentStep].currentState?.save();
       
       _logger.d('Checking for existing employee data...');
@@ -751,7 +865,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     }
   }
 
-  // Step 1: Personal Information
+  // Step 1: Personal Information - UPDATED WITH PRE-FILLED EMAIL
   Widget _buildPersonalInfoStep() {
     return _buildStepContainer(
       form: Form(
@@ -762,7 +876,35 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             _buildSectionTitle('A. Personal Information'),
             const SizedBox(height: 24),
             
-            // Full Name - FIXED: Added onChanged
+            // Display registered username info if available
+            if (_registeredUsername != null && _registeredUsername!.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Registered as: $_registeredUsername',
+                        style: TextStyle(
+                          color: Colors.blue.shade900,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            // Full Name
             TextFormField(
               initialValue: _personalInfo.fullName,
               decoration: _inputDecoration('Full Name *'),
@@ -786,7 +928,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // National ID/Passport - FIXED: Added onChanged
+            // National ID/Passport
             TextFormField(
               initialValue: _personalInfo.nationalIdOrPassport,
               decoration: _inputDecoration('National ID / Passport Number *'),
@@ -875,7 +1017,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Gender - FIXED: Added onChanged
+            // Gender
             DropdownButtonFormField<String>(
               initialValue: _personalInfo.gender.isNotEmpty ? _personalInfo.gender : null,
               decoration: _inputDecoration('Gender *'),
@@ -907,7 +1049,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Phone Number - FIXED: Added onChanged
+            // Phone Number
             TextFormField(
               initialValue: _personalInfo.phoneNumber,
               decoration: _inputDecoration('Phone Number *'),
@@ -932,10 +1074,19 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Email - FIXED: Added onChanged
+            // Email - PRE-FILLED FROM REGISTRATION (EDITABLE)
             TextFormField(
-              initialValue: _personalInfo.email,
-              decoration: _inputDecoration('Email Address *'),
+              initialValue: _personalInfo.email.isNotEmpty 
+                  ? _personalInfo.email 
+                  : _registeredEmail ?? '',
+              decoration: _inputDecoration('Email Address *').copyWith(
+                suffixIcon: _registeredEmail != null 
+                    ? const Tooltip(
+                        message: 'Pre-filled from registration. You can edit if needed.',
+                        child: Icon(Icons.check_circle, color: Colors.green, size: 20),
+                      )
+                    : null,
+              ),
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
                 if (value?.isEmpty ?? true) return 'Required';
@@ -961,7 +1112,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Postal Address - FIXED: Added onChanged
+            // Postal Address
             TextFormField(
               initialValue: _personalInfo.postalAddress,
               decoration: _inputDecoration('Postal Address *'),
@@ -985,7 +1136,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Physical Address - FIXED: Added onChanged
+            // Physical Address
             TextFormField(
               initialValue: _personalInfo.physicalAddress,
               decoration: _inputDecoration('Physical Address *'),
@@ -1019,7 +1170,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Next of Kin Name - FIXED: Added onChanged
+            // Next of Kin Name
             TextFormField(
               initialValue: _personalInfo.nextOfKin.name,
               decoration: _inputDecoration('Name *'),
@@ -1047,7 +1198,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Next of Kin Relationship - FIXED: Added onChanged
+            // Next of Kin Relationship
             TextFormField(
               initialValue: _personalInfo.nextOfKin.relationship,
               decoration: _inputDecoration('Relationship *'),
@@ -1075,7 +1226,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Next of Kin Contact - FIXED: Added onChanged
+            // Next of Kin Contact
             TextFormField(
               initialValue: _personalInfo.nextOfKin.contact,
               decoration: _inputDecoration('Contact Number *'),
@@ -2361,10 +2512,11 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     );
   }
 
+  // ✅ FIXED CODE
   double _getBeneficiaryTotalPercentage() {
     return _benefitsInsurance.beneficiaries.fold(
       0.0,
-      (sum, beneficiary) => sum + beneficiary.percentage,
+      (total, beneficiary) => total + beneficiary.percentage,
     );
   }
 
