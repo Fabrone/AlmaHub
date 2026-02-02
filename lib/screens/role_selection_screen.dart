@@ -15,9 +15,9 @@ class RoleSelectionScreen extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1A237E),
-              const Color(0xFF283593),
-              const Color(0xFF3949AB),
+              const Color.fromARGB(255, 66, 10, 113),
+              const Color.fromARGB(255, 132, 69, 161),
+              const Color.fromARGB(255, 66, 10, 113),
             ],
           ),
         ),
@@ -45,7 +45,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     child: const Icon(
                       Icons.business_center,
                       size: 80,
-                      color: Color(0xFF1A237E),
+                      color: Color.fromARGB(255, 66, 4, 104),
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -83,7 +83,7 @@ class RoleSelectionScreen extends StatelessWidget {
                           icon: Icons.person,
                           title: 'Employee',
                           description: 'Fill out your onboarding application',
-                          color: Colors.blue,
+                          color: const Color.fromARGB(255, 93, 4, 128),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -99,17 +99,17 @@ class RoleSelectionScreen extends StatelessWidget {
                           icon: Icons.admin_panel_settings,
                           title: 'HR Admin',
                           description: 'Manage employee applications',
-                          color: Colors.deepPurple,
+                          color: const Color.fromARGB(255, 98, 15, 153),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => Scaffold(
-                                  appBar: AppBar(
+                                  /*appBar: AppBar(
                                     title: const Text('HR Dashboard'),
-                                    backgroundColor: const Color(0xFF1A237E),
+                                    backgroundColor: const Color.fromARGB(255, 3, 89, 76),
                                     foregroundColor: Colors.white,
-                                  ),
+                                  ),*/
                                   body: const HRDashboard(),
                                 ),
                               ),
@@ -197,7 +197,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A237E),
+                        color: Color.fromARGB(255, 86, 26, 126),
                       ),
                     ),
                     const SizedBox(height: 8),

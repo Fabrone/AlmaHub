@@ -21,6 +21,7 @@ class _HRDashboardState extends State<HRDashboard> {
   String _statusFilter = 'draft'; // Changed default to 'draft'
   bool _isDownloading = false;
   String? _downloadProgress;
+  String _searchQuery = '';
 
   // Logger for comprehensive debugging
   final Logger _logger = Logger(
@@ -44,60 +45,113 @@ class _HRDashboardState extends State<HRDashboard> {
   @override
   Widget build(BuildContext context) {
     _logger.d('Building HR Dashboard widget');
-    return Container(
-      color: Colors.grey.shade50,
-      child: Column(
+    
+    return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 225, 221, 226),
+      appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 92, 4, 126),
+        elevation: 2,
+        title: const Text(
+          'HR Dashboard',
+          style: TextStyle(
+            fontWeight: FontWeight.w900, // Extra bold
+            color: Color.fromARGB(255, 237, 236, 239),
+            letterSpacing: 0.5,
+          ),
+        ),
+        actions: [
+          // Search icon button
+          IconButton(
+            icon: const Icon(Icons.search, color: Color.fromARGB(255, 242, 241, 243)),
+            onPressed: () {
+              _logger.i('Search button clicked');
+              _showSearchDialog();
+            },
+            tooltip: 'Search Employees',
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Column(
         children: [
-          _buildTopBar(),
           _buildStatsCards(),
           Expanded(
             child: _buildEmployeeTable(),
           ),
         ],
       ),
+      floatingActionButton: _buildFloatingDownloadButton(),
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      color: Colors.white,
-      child: Row(
-        children: [
-          const Text(
-            'Employee Onboarding Management',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A237E),
-            ),
+  void _showSearchDialog() {
+    _logger.d('Opening search dialog');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Search Employees'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Enter name, email, or ID...',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
           ),
-          const Spacer(),
-          ElevatedButton.icon(
-            onPressed: _isDownloading ? null : _downloadExcel,
-            icon: _isDownloading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.download_rounded),
-            label: Text(
-              _isDownloading
-                  ? (_downloadProgress ?? 'Generating...')
-                  : 'Download Excel',
-            ),
+          onChanged: (value) {
+            _logger.d('Search query changed: $value');
+            setState(() => _searchQuery = value.trim().toLowerCase());
+          },
+          onSubmitted: (value) {
+            _logger.i('Search submitted: $value');
+            setState(() => _searchQuery = value.trim().toLowerCase());
+            Navigator.pop(context);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _logger.d('Search cleared');
+              setState(() => _searchQuery = '');
+              Navigator.pop(context);
+            },
+            child: const Text('Clear'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _logger.i('Search applied: $_searchQuery');
+              Navigator.pop(context);
+            },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              disabledBackgroundColor: Colors.grey.shade400,
+              backgroundColor: const Color.fromARGB(255, 81, 3, 130),
             ),
+            child: const Text('Search'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingDownloadButton() {
+    return FloatingActionButton.extended(
+      onPressed: _isDownloading ? null : _downloadExcel,
+      backgroundColor: _isDownloading ? Colors.grey.shade400 : const Color.fromARGB(255, 86, 10, 119),
+      foregroundColor: Colors.white,
+      icon: _isDownloading
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+          : const Icon(Icons.download_rounded),
+      label: Text(
+        _isDownloading
+            ? (_downloadProgress ?? 'Generating...')
+            : 'Download Excel',
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -109,12 +163,12 @@ class _HRDashboardState extends State<HRDashboard> {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           _logger.e('Error in stats stream', error: snapshot.error);
-          return const SizedBox(height: 100);
+          return const SizedBox.shrink();
         }
 
         if (!snapshot.hasData) {
           _logger.d('Stats data not yet available');
-          return const SizedBox(height: 100);
+          return const SizedBox.shrink();
         }
 
         final docs = snapshot.data!.docs;
@@ -131,7 +185,6 @@ class _HRDashboardState extends State<HRDashboard> {
           drafts = total;
           _logger.d('Draft view: $drafts drafts');
         } else if (_statusFilter == 'submitted') {
-          // For submitted view, count by status in EmployeeDetails collection
           for (var doc in docs) {
             final data = doc.data() as Map<String, dynamic>;
             final status = data['status'] ?? 'submitted';
@@ -147,218 +200,113 @@ class _HRDashboardState extends State<HRDashboard> {
           _logger.d('Submitted view: $submitted submitted, $approved approved, $rejected rejected');
         }
 
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            children: [
-              _buildStatCard('Total in View', total, Colors.blue, Icons.people),
-              const SizedBox(width: 16),
-              if (_statusFilter == 'draft')
-                _buildStatCard('Drafts', drafts, Colors.grey, Icons.drafts)
-              else ...[
-                _buildStatCard('Submitted', submitted, Colors.orange, Icons.pending),
-                const SizedBox(width: 16),
-                _buildStatCard('Approved', approved, Colors.green, Icons.check_circle),
-                const SizedBox(width: 16),
-                _buildStatCard('Rejected', rejected, Colors.red, Icons.cancel),
-              ],
-            ],
-          ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = constraints.maxWidth;
+            _logger.d('Stats cards screen width: $screenWidth px');
+            
+            // Calculate card width as 30% of screen width
+            final cardWidth = screenWidth * 0.30;
+            // Calculate spacing dynamically (5% total spacing divided by gaps)
+            final spacing = screenWidth * 0.025;
+            
+            _logger.d('Card width: $cardWidth px, Spacing: $spacing px');
+            
+            return Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.02,
+                vertical: 12,
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildStatCard('Total in View', total, const Color.fromARGB(255, 209, 72, 221), Icons.people, cardWidth),
+                    SizedBox(width: spacing),
+                    if (_statusFilter == 'draft')
+                      _buildStatCard('Drafts', drafts, const Color.fromARGB(255, 213, 97, 217), Icons.drafts, cardWidth)
+                    else
+                      _buildStatCard('Submitted', submitted, Colors.orange, Icons.pending, cardWidth),
+                    SizedBox(width: spacing),
+                    _buildFilterCard(cardWidth),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildStatCard(String title, int value, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha:0.05),
-              blurRadius: 10,
+  Widget _buildStatCard(String title, int value, Color color, IconData icon, double cardWidth) {
+    // Adaptive sizing based on card width - reduced sizes for compact cards
+    final iconSize = (cardWidth * 0.08).clamp(16.0, 22.0);
+    final valueSize = (cardWidth * 0.07).clamp(14.0, 20.0);
+    final titleSize = (cardWidth * 0.045).clamp(10.0, 12.0);
+    final horizontalPadding = cardWidth * 0.05;
+    final verticalPadding = 8.0; // Fixed smaller vertical padding
+    
+    return Container(
+      width: cardWidth,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.all(cardWidth * 0.04),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 32),
+            child: Icon(
+              icon,
+              color: color,
+              size: iconSize,
             ),
-            const SizedBox(width: 16),
-            Column(
+          ),
+          SizedBox(width: cardWidth * 0.05),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   value.toString(),
-                  style: const TextStyle(
-                    fontSize: 32,
+                  style: TextStyle(
+                    fontSize: valueSize,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A237E),
+                    color: const Color.fromARGB(255, 86, 10, 119)
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: titleSize,
                     color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmployeeTable() {
-    return Container(
-      margin: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          _buildTableFilters(),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _getFilteredStream(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  _logger.e('Error in employee table stream', error: snapshot.error);
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  _logger.d('Waiting for employee data...');
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final employees = snapshot.data!.docs;
-                _logger.i('Loaded ${employees.length} employees from ${_getCollectionName()} collection');
-
-                if (employees.isEmpty) {
-                  _logger.w('No employees found in ${_getCollectionName()} collection');
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _statusFilter == 'draft' ? Icons.drafts : Icons.inbox,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _statusFilter == 'draft' 
-                              ? 'No draft applications found'
-                              : 'No submitted applications found',
-                          style: const TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: WidgetStateProperty.all(
-                      Colors.grey.shade100,
-                    ),
-                    columns: [
-                      const DataColumn(label: Text('No.')),
-                      const DataColumn(label: Text('Full Name')),
-                      const DataColumn(label: Text('Email')),
-                      const DataColumn(label: Text('Job Title')),
-                      const DataColumn(label: Text('Department')),
-                      if (_statusFilter == 'submitted') 
-                        const DataColumn(label: Text('Status')),
-                      const DataColumn(label: Text('Created')),
-                      if (_statusFilter == 'submitted')
-                        const DataColumn(label: Text('Submitted')),
-                      const DataColumn(label: Text('Actions')),
-                    ],
-                    rows: employees.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final doc = entry.value;
-                      final data = doc.data() as Map<String, dynamic>;
-                      
-                      _logger.d('Row ${index + 1}: ${data['personalInfo']?['fullName'] ?? 'Unknown'} (ID: ${doc.id})');
-                      
-                      return DataRow(
-                        cells: [
-                          DataCell(Text('${index + 1}')),
-                          DataCell(Text(data['personalInfo']?['fullName'] ?? '-')),
-                          DataCell(Text(data['personalInfo']?['email'] ?? '-')),
-                          DataCell(Text(data['employmentDetails']?['jobTitle'] ?? '-')),
-                          DataCell(Text(data['employmentDetails']?['department'] ?? '-')),
-                          if (_statusFilter == 'submitted')
-                            DataCell(_buildStatusBadge(data['status'] ?? 'submitted')),
-                          DataCell(Text(
-                            data['createdAt'] != null
-                                ? DateFormat('dd/MM/yyyy').format(
-                                    (data['createdAt'] as Timestamp).toDate(),
-                                  )
-                                : '-',
-                          )),
-                          if (_statusFilter == 'submitted')
-                            DataCell(Text(
-                              data['submittedAt'] != null
-                                  ? DateFormat('dd/MM/yyyy').format(
-                                      (data['submittedAt'] as Timestamp).toDate(),
-                                    )
-                                  : '-',
-                            )),
-                          DataCell(
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.visibility, size: 20),
-                                  onPressed: () {
-                                    _logger.i('View button clicked for employee: ${doc.id}');
-                                    _viewEmployee(doc.id);
-                                  },
-                                  tooltip: 'View Details',
-                                ),
-                                if (_statusFilter == 'submitted' && data['status'] == 'submitted') ...[
-                                  IconButton(
-                                    icon: const Icon(Icons.check_circle, size: 20, color: Colors.green),
-                                    onPressed: () {
-                                      _logger.i('Approve button clicked for employee: ${doc.id}');
-                                      _approveEmployee(doc.id);
-                                    },
-                                    tooltip: 'Approve',
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.cancel, size: 20, color: Colors.red),
-                                    onPressed: () {
-                                      _logger.i('Reject button clicked for employee: ${doc.id}');
-                                      _rejectEmployee(doc.id);
-                                    },
-                                    tooltip: 'Reject',
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                );
-              },
             ),
           ),
         ],
@@ -366,63 +314,439 @@ class _HRDashboardState extends State<HRDashboard> {
     );
   }
 
-  Widget _buildTableFilters() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search by name, email, or job title...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onChanged: (value) {
-                _logger.d('Search text changed: $value');
-                // Todo: Implement search functionality
-              },
-            ),
+  Widget _buildFilterCard(double cardWidth) {
+    final iconSize = (cardWidth * 0.06).clamp(14.0, 18.0);
+    final textSize = (cardWidth * 0.05).clamp(11.0, 13.0);
+    final horizontalPadding = cardWidth * 0.05;
+    final verticalPadding = 8.0; // Fixed smaller vertical padding to match stat cards
+    
+    return Container(
+      width: cardWidth,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(width: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButton<String>(
-              value: _statusFilter,
-              underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(
-                  value: 'draft',
-                  child: Row(
-                    children: [
-                      Icon(Icons.drafts, size: 18, color: Colors.grey),
-                      SizedBox(width: 8),
-                      Text('Draft'),
-                    ],
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: 'submitted',
-                  child: Row(
-                    children: [
-                      Icon(Icons.send, size: 18, color: Colors.orange),
-                      SizedBox(width: 8),
-                      Text('Submitted'),
-                    ],
+        ],
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: _statusFilter,
+        decoration: InputDecoration(
+          labelText: 'Filter',
+          labelStyle: TextStyle(
+            fontSize: textSize,
+            fontWeight: FontWeight.w600,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          contentPadding: EdgeInsets.symmetric(
+            vertical: 6,
+            horizontal: horizontalPadding * 0.8,
+          ),
+          isDense: true,
+        ),
+        style: TextStyle(fontSize: textSize, color: Colors.black87),
+        icon: Icon(Icons.arrow_drop_down, size: iconSize + 2),
+        items: [
+          DropdownMenuItem(
+            value: 'draft',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.drafts, size: iconSize, color: const Color.fromARGB(255, 207, 113, 225)),
+                SizedBox(width: horizontalPadding * 0.4),
+                Flexible(
+                  child: Text(
+                    'Draft',
+                    style: TextStyle(fontSize: textSize),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
-              onChanged: (value) {
-                _logger.i('Filter changed from "$_statusFilter" to "$value"');
-                setState(() => _statusFilter = value!);
-                _logger.d('Now querying ${_getCollectionName()} collection');
-              },
+            ),
+          ),
+          DropdownMenuItem(
+            value: 'submitted',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.send, size: iconSize, color: Colors.orange),
+                SizedBox(width: horizontalPadding * 0.4),
+                Flexible(
+                  child: Text(
+                    'Submitted',
+                    style: TextStyle(fontSize: textSize),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        onChanged: (value) {
+          _logger.i('Filter changed from "$_statusFilter" to "$value"');
+          setState(() => _statusFilter = value!);
+          _logger.d('Now querying ${_getCollectionName()} collection');
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmployeeTable() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        _logger.d('Employee table screen width: $screenWidth px');
+        
+        return Container(
+          margin: EdgeInsets.symmetric(
+            horizontal: screenWidth * 0.02,
+            vertical: 12,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildTableHeader(screenWidth),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: _getFilteredStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      _logger.e('Error in employee table stream', error: snapshot.error);
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      _logger.d('Waiting for employee data...');
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final allEmployees = snapshot.data!.docs;
+                    _logger.i('Loaded ${allEmployees.length} employees from ${_getCollectionName()} collection');
+
+                    // Apply search filter
+                    final employees = _searchQuery.isEmpty
+                        ? allEmployees
+                        : allEmployees.where((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final fullName = (data['personalInfo']?['fullName'] ?? '').toString().toLowerCase();
+                            final email = (data['personalInfo']?['email'] ?? '').toString().toLowerCase();
+                            final nationalId = (data['personalInfo']?['nationalIdOrPassport'] ?? '').toString().toLowerCase();
+                            final docId = doc.id.toLowerCase();
+                            
+                            return fullName.contains(_searchQuery) ||
+                                   email.contains(_searchQuery) ||
+                                   nationalId.contains(_searchQuery) ||
+                                   docId.contains(_searchQuery);
+                          }).toList();
+
+                    if (_searchQuery.isNotEmpty) {
+                      _logger.d('Search active: "$_searchQuery" - Found ${employees.length} matches');
+                    }
+
+                    if (employees.isEmpty) {
+                      _logger.w('No employees found ${_searchQuery.isNotEmpty ? "matching search" : "in ${_getCollectionName()} collection"}');
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _searchQuery.isNotEmpty
+                                  ? Icons.search_off
+                                  : (_statusFilter == 'draft' ? Icons.drafts : Icons.inbox),
+                              size: 64,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _searchQuery.isNotEmpty
+                                  ? 'No results found for "$_searchQuery"'
+                                  : (_statusFilter == 'draft' 
+                                      ? 'No draft applications found'
+                                      : 'No submitted applications found'),
+                              style: const TextStyle(fontSize: 16, color: Colors.grey),
+                            ),
+                            if (_searchQuery.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _logger.d('Clearing search filter');
+                                  setState(() => _searchQuery = '');
+                                },
+                                icon: const Icon(Icons.clear),
+                                label: const Text('Clear Search'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }
+
+                    // Always show table with horizontal and vertical scrolling
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          headingRowHeight: 50,
+                          dataRowMinHeight: 45,
+                          dataRowMaxHeight: 45,
+                          headingRowColor: WidgetStateProperty.all(
+                            Colors.grey.shade100,
+                          ),
+                          columnSpacing: 24,
+                          headingTextStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Color.fromARGB(255, 86, 10, 119)
+                          ),
+                          dataTextStyle: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                          columns: [
+                            const DataColumn(label: Text('No.')),
+                            const DataColumn(label: Text('Full Name')),
+                            const DataColumn(label: Text('Email')),
+                            const DataColumn(label: Text('Phone')),
+                            const DataColumn(label: Text('National ID')),
+                            const DataColumn(label: Text('Job Title')),
+                            const DataColumn(label: Text('Department')),
+                            const DataColumn(label: Text('Employment Type')),
+                            const DataColumn(label: Text('Start Date')),
+                            const DataColumn(label: Text('KRA PIN')),
+                            const DataColumn(label: Text('NSSF Number')),
+                            const DataColumn(label: Text('NHIF Number')),
+                            const DataColumn(label: Text('Basic Salary')),
+                            const DataColumn(label: Text('Bank Name')),
+                            const DataColumn(label: Text('Account Number')),
+                            if (_statusFilter == 'submitted') 
+                              const DataColumn(label: Text('Status')),
+                            const DataColumn(label: Text('Created')),
+                            if (_statusFilter == 'submitted')
+                              const DataColumn(label: Text('Submitted')),
+                            const DataColumn(label: Text('Actions')),
+                          ],
+                          rows: employees.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final doc = entry.value;
+                            final data = doc.data() as Map<String, dynamic>;
+                            
+                            _logger.d('Row ${index + 1}: ${data['personalInfo']?['fullName'] ?? 'Unknown'} (ID: ${doc.id})');
+                            
+                            return DataRow(
+                              cells: [
+                                DataCell(Text('${index + 1}')),
+                                DataCell(
+                                  SizedBox(
+                                    width: 150,
+                                    child: Text(
+                                      data['personalInfo']?['fullName'] ?? '-',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 180,
+                                    child: Text(
+                                      data['personalInfo']?['email'] ?? '-',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(Text(data['personalInfo']?['phoneNumber'] ?? '-')),
+                                DataCell(Text(data['personalInfo']?['nationalIdOrPassport'] ?? '-')),
+                                DataCell(
+                                  SizedBox(
+                                    width: 150,
+                                    child: Text(
+                                      data['employmentDetails']?['jobTitle'] ?? '-',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(Text(data['employmentDetails']?['department'] ?? '-')),
+                                DataCell(Text(data['employmentDetails']?['employmentType'] ?? '-')),
+                                DataCell(Text(
+                                  data['employmentDetails']?['startDate'] != null
+                                      ? DateFormat('dd/MM/yyyy').format(
+                                          (data['employmentDetails']['startDate'] as Timestamp).toDate(),
+                                        )
+                                      : '-',
+                                )),
+                                DataCell(Text(data['statutoryDocs']?['kraPinNumber'] ?? '-')),
+                                DataCell(Text(data['statutoryDocs']?['nssfNumber'] ?? '-')),
+                                DataCell(Text(data['statutoryDocs']?['nhifNumber'] ?? '-')),
+                                DataCell(Text(
+                                  data['payrollDetails']?['basicSalary'] != null
+                                      ? 'KES ${NumberFormat('#,###').format(data['payrollDetails']['basicSalary'])}'
+                                      : '-',
+                                )),
+                                DataCell(Text(data['payrollDetails']?['bankDetails']?['bankName'] ?? '-')),
+                                DataCell(Text(data['payrollDetails']?['bankDetails']?['accountNumber'] ?? '-')),
+                                if (_statusFilter == 'submitted')
+                                  DataCell(_buildStatusBadge(data['status'] ?? 'submitted')),
+                                DataCell(Text(
+                                  data['createdAt'] != null
+                                      ? DateFormat('dd/MM/yyyy').format(
+                                          (data['createdAt'] as Timestamp).toDate(),
+                                        )
+                                      : '-',
+                                )),
+                                if (_statusFilter == 'submitted')
+                                  DataCell(Text(
+                                    data['submittedAt'] != null
+                                        ? DateFormat('dd/MM/yyyy').format(
+                                            (data['submittedAt'] as Timestamp).toDate(),
+                                          )
+                                        : '-',
+                                  )),
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.visibility, size: 20),
+                                        onPressed: () {
+                                          _logger.i('View button clicked for employee: ${doc.id}');
+                                          _viewEmployee(doc.id);
+                                        },
+                                        tooltip: 'View Details',
+                                      ),
+                                      if (_statusFilter == 'submitted' && data['status'] == 'submitted') ...[
+                                        IconButton(
+                                          icon: const Icon(Icons.check_circle, size: 20, color: Colors.green),
+                                          onPressed: () {
+                                            _logger.i('Approve button clicked for employee: ${doc.id}');
+                                            _approveEmployee(doc.id);
+                                          },
+                                          tooltip: 'Approve',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.cancel, size: 20, color: Colors.red),
+                                          onPressed: () {
+                                            _logger.i('Reject button clicked for employee: ${doc.id}');
+                                            _rejectEmployee(doc.id);
+                                          },
+                                          tooltip: 'Reject',
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTableHeader(double screenWidth) {
+    // Adaptive sizing based on actual screen width
+    final logoSize = (screenWidth * 0.025).clamp(35.0, 50.0);
+    final titleSize = (screenWidth * 0.014).clamp(16.0, 22.0);
+    final subtitleSize = (screenWidth * 0.010).clamp(12.0, 15.0);
+    final badgeTextSize = (screenWidth * 0.009).clamp(11.0, 14.0);
+    
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: screenWidth * 0.025,
+        vertical: 16,
+      ),
+      decoration: const BoxDecoration(
+        color:  Color.fromARGB(255, 86, 10, 119),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: logoSize,
+            height: logoSize,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                'JV',
+                style: TextStyle(
+                  fontSize: logoSize * 0.45,
+                  fontWeight: FontWeight.bold,
+                  color: Color.fromARGB(255, 86, 10, 119),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: screenWidth * 0.015),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'JV Almacis',
+                  style: TextStyle(
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Employee Onboarding Records',
+                  style: TextStyle(
+                    fontSize: subtitleSize,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _statusFilter == 'draft' ? 'DRAFT VIEW' : 'SUBMITTED VIEW',
+              style: TextStyle(
+                fontSize: badgeTextSize,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
         ],
@@ -493,10 +817,13 @@ class _HRDashboardState extends State<HRDashboard> {
     }
     
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         text,

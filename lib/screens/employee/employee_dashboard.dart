@@ -47,7 +47,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           'My Application',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF1A237E),
+        backgroundColor: const Color.fromARGB(255, 84, 4, 108),
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -64,7 +64,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _startNewApplication(),
-        backgroundColor: const Color(0xFF1A237E),
+        backgroundColor: const Color.fromARGB(255, 181, 153, 189),
         icon: const Icon(Icons.add),
         label: const Text('New Application'),
       ),
@@ -77,7 +77,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A237E),
+        color: const Color.fromARGB(255, 84, 4, 108),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha:0.1),
@@ -200,7 +200,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                       icon: const Icon(Icons.refresh),
                       label: const Text('Retry'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A237E),
+                        backgroundColor: const Color.fromARGB(255, 84, 4, 108),
                       ),
                     ),
                   ],
@@ -314,7 +314,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF1A237E),
+                                        color: Color.fromARGB(255, 84, 4, 108),
                                       ),
                                     ),
                                     const SizedBox(height: 4),
