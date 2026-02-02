@@ -42,94 +42,226 @@ class ExcelDownloadService {
 
       // Get the downloads directory
       final directory = await _getDownloadDirectory();
+      
+      // Create the full file path
+      final filePath = '${directory.path}/$fileName';
 
-      // Create the file
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(fileBytes);
+      // Create the file and write bytes
+      final file = File(filePath);
+      await file.writeAsBytes(fileBytes, flush: true);
+      
+      // Verify file was created and has content
+      if (!await file.exists()) {
+        throw Exception('File was not created at $filePath');
+      }
+      
+      final fileSize = await file.length();
+      if (fileSize == 0) {
+        throw Exception('File was created but is empty');
+      }
+      
+      print('✅ Excel file saved successfully to: $filePath');
+      print('📊 File size: ${getReadableFileSize(fileSize)}');
 
-      return file.path;
+      return filePath;
     } catch (e) {
+      print('❌ Error saving Excel file: $e');
       throw Exception('Failed to save file on mobile: $e');
     }
   }
 
   /// Request storage permissions based on Android version
   static Future<bool> _requestStoragePermission() async {
+    if (Platform.isIOS) {
+      // iOS doesn't need permission for app documents directory
+      return true;
+    }
+    
     if (!Platform.isAndroid) {
-      // iOS doesn't need permission for app documents
+      // Desktop platforms don't need special permissions
       return true;
     }
 
-    final androidInfo = await DeviceInfoPlugin().androidInfo;
-    final sdkInt = androidInfo.version.sdkInt;
-    
-    if (sdkInt >= 33) {
-      // Android 13+: No permission needed for app-specific directories
-      return true;
-    } else if (sdkInt >= 30) {
-      // Android 11-12: Check for storage permission
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
+    try {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      final sdkInt = androidInfo.version.sdkInt;
+      
+      print('📱 Android SDK version: $sdkInt');
+      
+      if (sdkInt >= 33) {
+        // Android 13+ (API 33+): Use MANAGE_EXTERNAL_STORAGE or scoped storage
+        // For app-specific directories, no permission needed
+        // For public Downloads folder, we need special permission
+        
+        // First try to use storage permission
+        var status = await Permission.storage.status;
+        print('Storage permission status (Android 13+): $status');
+        
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+          print('Storage permission after request: $status');
+        }
+        
+        // If storage permission is not granted, try manageExternalStorage
+        if (!status.isGranted) {
+          var manageStatus = await Permission.manageExternalStorage.status;
+          print('Manage external storage status: $manageStatus');
+          
+          if (!manageStatus.isGranted) {
+            manageStatus = await Permission.manageExternalStorage.request();
+            print('Manage external storage after request: $manageStatus');
+            return manageStatus.isGranted;
+          }
+          return manageStatus.isGranted;
+        }
+        
+        return status.isGranted;
+      } else if (sdkInt >= 30) {
+        // Android 11-12 (API 30-32): Use scoped storage
+        var status = await Permission.storage.status;
+        print('Storage permission status (Android 11-12): $status');
+        
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+          print('Storage permission after request: $status');
+        }
+        
+        // Also try manageExternalStorage for better access
+        if (!status.isGranted) {
+          var manageStatus = await Permission.manageExternalStorage.status;
+          if (!manageStatus.isGranted) {
+            manageStatus = await Permission.manageExternalStorage.request();
+          }
+          return manageStatus.isGranted;
+        }
+        
+        return status.isGranted;
+      } else {
+        // Android 10 and below (API 29 and lower)
+        var status = await Permission.storage.status;
+        print('Storage permission status (Android 10-): $status');
+        
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+          print('Storage permission after request: $status');
+        }
+        return status.isGranted;
       }
-      return status.isGranted;
-    } else {
-      // Android 10 and below
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-      }
-      return status.isGranted;
+    } catch (e) {
+      print('❌ Error requesting storage permission: $e');
+      return false;
     }
   }
 
   /// Get the correct download directory based on platform
   static Future<Directory> _getDownloadDirectory() async {
     if (Platform.isAndroid) {
-      // Use app-specific external storage (doesn't require special permissions on Android 11+)
-      final directory = await getExternalStorageDirectory();
-      
-      if (directory != null) {
-        // Create AlmaHub/Downloads folder in app-specific directory
-        final almaHubDir = Directory('${directory.path}/AlmaHub/Downloads');
+      try {
+        // Try to get the public Downloads directory first
+        // This is the standard location users expect
+        final androidInfo = await DeviceInfoPlugin().androidInfo;
+        final sdkInt = androidInfo.version.sdkInt;
+        
+        // For Android 10+ (API 29+), try to access Downloads folder
+        if (sdkInt >= 29) {
+          // Try external storage directory first
+          final Directory? externalDir = await getExternalStorageDirectory();
+          
+          if (externalDir != null) {
+            // Navigate to the public Downloads folder
+            // External storage path is usually: /storage/emulated/0/Android/data/com.yourapp/files
+            // We want: /storage/emulated/0/Download
+            final pathComponents = externalDir.path.split('/');
+            final downloadsPath = '/${pathComponents[1]}/${pathComponents[2]}/Download';
+            
+            final publicDownloads = Directory(downloadsPath);
+            
+            // Check if public Downloads exists and is accessible
+            if (await publicDownloads.exists()) {
+              print('✅ Using public Downloads directory: ${publicDownloads.path}');
+              return publicDownloads;
+            } else {
+              print('⚠️ Public Downloads not accessible, using app-specific folder');
+            }
+          }
+        }
+        
+        // Fallback: Use app-specific external storage
+        final externalDir = await getExternalStorageDirectory();
+        
+        if (externalDir != null) {
+          // Create AlmaHub/Downloads folder in app-specific directory
+          final almaHubDir = Directory('${externalDir.path}/AlmaHub/Downloads');
+          
+          if (!await almaHubDir.exists()) {
+            await almaHubDir.create(recursive: true);
+            print('📁 Created directory: ${almaHubDir.path}');
+          }
+          
+          print('✅ Using app-specific directory: ${almaHubDir.path}');
+          return almaHubDir;
+        }
+        
+        // Last resort: Internal storage
+        final appDir = await getApplicationDocumentsDirectory();
+        final almaHubDir = Directory('${appDir.path}/AlmaHub/Downloads');
+        
         if (!await almaHubDir.exists()) {
           await almaHubDir.create(recursive: true);
+          print('📁 Created directory: ${almaHubDir.path}');
         }
+        
+        print('✅ Using internal directory: ${almaHubDir.path}');
         return almaHubDir;
+        
+      } catch (e) {
+        print('❌ Error getting Android downloads directory: $e');
+        // Absolute fallback
+        final appDir = await getApplicationDocumentsDirectory();
+        return appDir;
       }
-      
-      // Fallback to internal storage
-      final appDir = await getApplicationDocumentsDirectory();
-      final almaHubDir = Directory('${appDir.path}/AlmaHub/Downloads');
-      if (!await almaHubDir.exists()) {
-        await almaHubDir.create(recursive: true);
-      }
-      return almaHubDir;
     } else if (Platform.isIOS) {
       // iOS: Use documents directory
       final directory = await getApplicationDocumentsDirectory();
       final almaHubDir = Directory('${directory.path}/AlmaHub/Downloads');
+      
       if (!await almaHubDir.exists()) {
         await almaHubDir.create(recursive: true);
+        print('📁 Created iOS directory: ${almaHubDir.path}');
       }
+      
+      print('✅ Using iOS directory: ${almaHubDir.path}');
       return almaHubDir;
     } else {
       // Desktop platforms (Windows, macOS, Linux)
-      final directory = await getDownloadsDirectory();
-      if (directory != null) {
-        final almaHubDir = Directory('${directory.path}/AlmaHub');
-        if (!await almaHubDir.exists()) {
-          await almaHubDir.create(recursive: true);
+      try {
+        final directory = await getDownloadsDirectory();
+        
+        if (directory != null) {
+          final almaHubDir = Directory('${directory.path}/AlmaHub');
+          
+          if (!await almaHubDir.exists()) {
+            await almaHubDir.create(recursive: true);
+            print('📁 Created desktop directory: ${almaHubDir.path}');
+          }
+          
+          print('✅ Using desktop Downloads directory: ${almaHubDir.path}');
+          return almaHubDir;
         }
-        return almaHubDir;
+      } catch (e) {
+        print('⚠️ Could not access Downloads directory: $e');
       }
       
       // Fallback to documents directory
       final appDir = await getApplicationDocumentsDirectory();
       final almaHubDir = Directory('${appDir.path}/AlmaHub/Downloads');
+      
       if (!await almaHubDir.exists()) {
         await almaHubDir.create(recursive: true);
+        print('📁 Created fallback directory: ${almaHubDir.path}');
       }
+      
+      print('✅ Using fallback directory: ${almaHubDir.path}');
       return almaHubDir;
     }
   }
@@ -142,11 +274,21 @@ class ExcelDownloadService {
     }
 
     try {
+      print('📂 Attempting to open file: $filePath');
+      
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw Exception('File does not exist at $filePath');
+      }
+      
       final result = await OpenFile.open(filePath);
+      print('📱 Open file result: ${result.type} - ${result.message}');
+      
       if (result.type != ResultType.done) {
         throw Exception('Could not open file: ${result.message}');
       }
     } catch (e) {
+      print('❌ Error opening file: $e');
       throw Exception('Failed to open file: $e');
     }
   }
@@ -185,8 +327,10 @@ class ExcelDownloadService {
       final file = File(filePath);
       if (await file.exists()) {
         await file.delete();
+        print('🗑️ File deleted: $filePath');
       }
     } catch (e) {
+      print('❌ Error deleting file: $e');
       throw Exception('Failed to delete file: $e');
     }
   }
