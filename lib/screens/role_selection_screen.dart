@@ -105,11 +105,7 @@ class RoleSelectionScreen extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => Scaffold(
-                                  /*appBar: AppBar(
-                                    title: const Text('HR Dashboard'),
-                                    backgroundColor: const Color.fromARGB(255, 3, 89, 76),
-                                    foregroundColor: Colors.white,
-                                  ),*/
+
                                   body: const HRDashboard(),
                                 ),
                               ),
@@ -130,14 +126,6 @@ class RoleSelectionScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Authentication will be added in the next phase',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
                 ],
               ),
             ),

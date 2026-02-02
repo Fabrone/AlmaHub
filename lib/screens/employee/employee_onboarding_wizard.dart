@@ -241,7 +241,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             'Employee Onboarding Form',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          backgroundColor: const Color(0xFF1A237E),
+          backgroundColor: const Color.fromARGB(255, 84, 4, 108),
           foregroundColor: Colors.white,
           elevation: 0,
         ),
@@ -265,7 +265,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           'Employee Onboarding Form',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF1A237E),
+        backgroundColor: const Color.fromARGB(255, 84, 4, 108),
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -319,7 +319,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: isCompleted || isCurrent
-                        ? const Color(0xFF1A237E)
+                        ? const Color.fromARGB(255, 84, 4, 108)
                         : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
@@ -385,8 +385,8 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                 onPressed: _previousStep,
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: Color(0xFF1A237E), width: 2),
-                  foregroundColor: const Color(0xFF1A237E),
+                  side: const BorderSide(color: Color.fromARGB(255, 84, 4, 121), width: 2),
+                  foregroundColor: const Color.fromARGB(255, 78, 15, 118),
                 ),
                 child: const Text(
                   'Previous',
@@ -446,7 +446,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             child: ElevatedButton(
               onPressed: _currentStep == _totalSteps - 1 ? _submitForm : _nextStep,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 84, 21, 132),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 elevation: 3,
@@ -697,7 +697,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 85, 30, 122),
               ),
               child: const Text('Submit'),
             ),
@@ -888,13 +888,13 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                    Icon(Icons.info_outline, color: const Color.fromARGB(255, 195, 25, 210), size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Registered as: $_registeredUsername',
                         style: TextStyle(
-                          color: Colors.blue.shade900,
+                          color: const Color.fromARGB(255, 102, 13, 161),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1955,7 +1955,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  leading: const Icon(Icons.school, color: Color(0xFF1A237E)),
+                  leading: const Icon(Icons.school, color: Color.fromARGB(255, 93, 26, 126)),
                   title: Text(entry.value.name),
                   subtitle: Text(DateFormat('dd/MM/yyyy').format(entry.value.uploadedAt)),
                   trailing: IconButton(
@@ -1996,7 +1996,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               icon: const Icon(Icons.add),
               label: const Text('Add Academic Certificate'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 86, 26, 126),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -2013,7 +2013,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  leading: const Icon(Icons.workspace_premium, color: Color(0xFF1A237E)),
+                  leading: const Icon(Icons.workspace_premium, color: Color.fromARGB(255, 88, 26, 126)),
                   title: Text(entry.value.name),
                   subtitle: Text(DateFormat('dd/MM/yyyy').format(entry.value.uploadedAt)),
                   trailing: IconButton(
@@ -2054,7 +2054,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               icon: const Icon(Icons.add),
               label: const Text('Add Professional Certificate'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 86, 26, 126),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -2076,7 +2076,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  leading: const Icon(Icons.verified, color: Color(0xFF1A237E)),
+                  leading: const Icon(Icons.verified, color: Color.fromARGB(255, 81, 26, 126)),
                   title: Text(entry.key),
                   subtitle: Text(entry.value),
                   trailing: IconButton(
@@ -2103,7 +2103,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               icon: const Icon(Icons.add),
               label: const Text('Add Professional Registration'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 88, 26, 126),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -2198,7 +2198,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                     );
                   });
                 },
-                activeColor: const Color(0xFF1A237E),
+                activeColor: const Color.fromARGB(255, 86, 26, 126),
               ),
             ),
             const SizedBox(height: 16),
@@ -2221,7 +2221,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                     );
                   });
                 },
-                activeColor: const Color(0xFF1A237E),
+                activeColor: const Color.fromARGB(255, 84, 26, 126),
               ),
             ),
             
@@ -2261,7 +2261,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  leading: const Icon(Icons.person, color: Color(0xFF1A237E)),
+                  leading: const Icon(Icons.person, color: Color.fromARGB(255, 83, 26, 126)),
                   title: Text(dependant.name),
                   subtitle: Text('${dependant.relationship}${dependant.dateOfBirth != null ? ' - ${DateFormat('dd/MM/yyyy').format(dependant.dateOfBirth!)}' : ''}'),
                   trailing: IconButton(
@@ -2288,7 +2288,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               icon: const Icon(Icons.add),
               label: const Text('Add NHIF Dependant'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 83, 26, 126),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -2385,7 +2385,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               icon: const Icon(Icons.add),
               label: const Text('Add Beneficiary'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 83, 26, 126),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -2431,7 +2431,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                     );
                   });
                 },
-                activeThumbColor: const Color(0xFF1A237E),
+                activeThumbColor: const Color.fromARGB(255, 83, 26, 126),
               ),
             ),
             const SizedBox(height: 16),
@@ -2452,7 +2452,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                     );
                   });
                 },
-                activeThumbColor: const Color(0xFF1A237E),
+                activeThumbColor: const Color.fromARGB(255, 83, 26, 126),
               ),
             ),
             const SizedBox(height: 24),
@@ -2474,7 +2474,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  leading: const Icon(Icons.devices, color: Color(0xFF1A237E)),
+                  leading: const Icon(Icons.devices, color: Color.fromARGB(255, 86, 26, 126)),
                   title: Text(equipment.itemName),
                   subtitle: Text('S/N: ${equipment.serialNumber}${equipment.issuedDate != null ? '\nIssued: ${DateFormat('dd/MM/yyyy').format(equipment.issuedDate!)}' : ''}'),
                   trailing: IconButton(
@@ -2502,7 +2502,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               icon: const Icon(Icons.add),
               label: const Text('Add Issued Equipment'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 84, 26, 126),
                 foregroundColor: Colors.white,
               ),
             ),
@@ -2635,7 +2635,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
+              backgroundColor: const Color.fromARGB(255, 83, 26, 126),
               foregroundColor: Colors.white,
             ),
             child: const Text('Add'),
@@ -2732,7 +2732,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 86, 26, 126),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Add'),
@@ -2835,7 +2835,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
+              backgroundColor: const Color.fromARGB(255, 86, 26, 126),
               foregroundColor: Colors.white,
             ),
             child: const Text('Add'),
@@ -2933,7 +2933,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E),
+                backgroundColor: const Color.fromARGB(255, 84, 26, 126),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Add'),
@@ -2958,7 +2958,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
       style: const TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.bold,
-        color: Color(0xFF1A237E),
+        color: Color.fromARGB(255, 86, 26, 126),
       ),
     );
   }
@@ -3001,9 +3001,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
                 : (url != null ? 'File Uploaded' : 'Choose File'),
           ),
           style: OutlinedButton.styleFrom(
-            foregroundColor: url != null ? Colors.green : const Color(0xFF1A237E),
+            foregroundColor: url != null ? Colors.green : const Color.fromARGB(255, 83, 26, 126),
             side: BorderSide(
-              color: url != null ? Colors.green : const Color(0xFF1A237E),
+              color: url != null ? Colors.green : const Color.fromARGB(255, 83, 26, 126),
             ),
           ),
         ),
