@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -60,12 +61,12 @@ class ExcelDownloadService {
         throw Exception('File was created but is empty');
       }
       
-      print('✅ Excel file saved successfully to: $filePath');
-      print('📊 File size: ${getReadableFileSize(fileSize)}');
+      debugPrint('✅ Excel file saved successfully to: $filePath');
+      debugPrint('📊 File size: ${getReadableFileSize(fileSize)}');
 
       return filePath;
     } catch (e) {
-      print('❌ Error saving Excel file: $e');
+      debugPrint('❌ Error saving Excel file: $e');
       throw Exception('Failed to save file on mobile: $e');
     }
   }
@@ -86,7 +87,7 @@ class ExcelDownloadService {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
       final sdkInt = androidInfo.version.sdkInt;
       
-      print('📱 Android SDK version: $sdkInt');
+      debugPrint('📱 Android SDK version: $sdkInt');
       
       if (sdkInt >= 33) {
         // Android 13+ (API 33+): Use MANAGE_EXTERNAL_STORAGE or scoped storage
@@ -95,21 +96,21 @@ class ExcelDownloadService {
         
         // First try to use storage permission
         var status = await Permission.storage.status;
-        print('Storage permission status (Android 13+): $status');
+        debugPrint('Storage permission status (Android 13+): $status');
         
         if (!status.isGranted) {
           status = await Permission.storage.request();
-          print('Storage permission after request: $status');
+          debugPrint('Storage permission after request: $status');
         }
         
         // If storage permission is not granted, try manageExternalStorage
         if (!status.isGranted) {
           var manageStatus = await Permission.manageExternalStorage.status;
-          print('Manage external storage status: $manageStatus');
+          debugPrint('Manage external storage status: $manageStatus');
           
           if (!manageStatus.isGranted) {
             manageStatus = await Permission.manageExternalStorage.request();
-            print('Manage external storage after request: $manageStatus');
+            debugPrint('Manage external storage after request: $manageStatus');
             return manageStatus.isGranted;
           }
           return manageStatus.isGranted;
@@ -119,11 +120,11 @@ class ExcelDownloadService {
       } else if (sdkInt >= 30) {
         // Android 11-12 (API 30-32): Use scoped storage
         var status = await Permission.storage.status;
-        print('Storage permission status (Android 11-12): $status');
+        debugPrint('Storage permission status (Android 11-12): $status');
         
         if (!status.isGranted) {
           status = await Permission.storage.request();
-          print('Storage permission after request: $status');
+          debugPrint('Storage permission after request: $status');
         }
         
         // Also try manageExternalStorage for better access
@@ -139,16 +140,16 @@ class ExcelDownloadService {
       } else {
         // Android 10 and below (API 29 and lower)
         var status = await Permission.storage.status;
-        print('Storage permission status (Android 10-): $status');
+        debugPrint('Storage permission status (Android 10-): $status');
         
         if (!status.isGranted) {
           status = await Permission.storage.request();
-          print('Storage permission after request: $status');
+          debugPrint('Storage permission after request: $status');
         }
         return status.isGranted;
       }
     } catch (e) {
-      print('❌ Error requesting storage permission: $e');
+      debugPrint('❌ Error requesting storage permission: $e');
       return false;
     }
   }
@@ -178,10 +179,10 @@ class ExcelDownloadService {
             
             // Check if public Downloads exists and is accessible
             if (await publicDownloads.exists()) {
-              print('✅ Using public Downloads directory: ${publicDownloads.path}');
+              debugPrint('✅ Using public Downloads directory: ${publicDownloads.path}');
               return publicDownloads;
             } else {
-              print('⚠️ Public Downloads not accessible, using app-specific folder');
+              debugPrint('⚠️ Public Downloads not accessible, using app-specific folder');
             }
           }
         }
@@ -195,10 +196,10 @@ class ExcelDownloadService {
           
           if (!await almaHubDir.exists()) {
             await almaHubDir.create(recursive: true);
-            print('📁 Created directory: ${almaHubDir.path}');
+            debugPrint('📁 Created directory: ${almaHubDir.path}');
           }
           
-          print('✅ Using app-specific directory: ${almaHubDir.path}');
+          debugPrint('✅ Using app-specific directory: ${almaHubDir.path}');
           return almaHubDir;
         }
         
@@ -208,14 +209,14 @@ class ExcelDownloadService {
         
         if (!await almaHubDir.exists()) {
           await almaHubDir.create(recursive: true);
-          print('📁 Created directory: ${almaHubDir.path}');
+          debugPrint('📁 Created directory: ${almaHubDir.path}');
         }
         
-        print('✅ Using internal directory: ${almaHubDir.path}');
+        debugPrint('✅ Using internal directory: ${almaHubDir.path}');
         return almaHubDir;
         
       } catch (e) {
-        print('❌ Error getting Android downloads directory: $e');
+        debugPrint('❌ Error getting Android downloads directory: $e');
         // Absolute fallback
         final appDir = await getApplicationDocumentsDirectory();
         return appDir;
@@ -227,10 +228,10 @@ class ExcelDownloadService {
       
       if (!await almaHubDir.exists()) {
         await almaHubDir.create(recursive: true);
-        print('📁 Created iOS directory: ${almaHubDir.path}');
+        debugPrint('📁 Created iOS directory: ${almaHubDir.path}');
       }
       
-      print('✅ Using iOS directory: ${almaHubDir.path}');
+      debugPrint('✅ Using iOS directory: ${almaHubDir.path}');
       return almaHubDir;
     } else {
       // Desktop platforms (Windows, macOS, Linux)
@@ -242,14 +243,14 @@ class ExcelDownloadService {
           
           if (!await almaHubDir.exists()) {
             await almaHubDir.create(recursive: true);
-            print('📁 Created desktop directory: ${almaHubDir.path}');
+            debugPrint('📁 Created desktop directory: ${almaHubDir.path}');
           }
           
-          print('✅ Using desktop Downloads directory: ${almaHubDir.path}');
+          debugPrint('✅ Using desktop Downloads directory: ${almaHubDir.path}');
           return almaHubDir;
         }
       } catch (e) {
-        print('⚠️ Could not access Downloads directory: $e');
+        debugPrint('⚠️ Could not access Downloads directory: $e');
       }
       
       // Fallback to documents directory
@@ -258,10 +259,10 @@ class ExcelDownloadService {
       
       if (!await almaHubDir.exists()) {
         await almaHubDir.create(recursive: true);
-        print('📁 Created fallback directory: ${almaHubDir.path}');
+        debugPrint('📁 Created fallback directory: ${almaHubDir.path}');
       }
       
-      print('✅ Using fallback directory: ${almaHubDir.path}');
+      debugPrint('✅ Using fallback directory: ${almaHubDir.path}');
       return almaHubDir;
     }
   }
@@ -274,7 +275,7 @@ class ExcelDownloadService {
     }
 
     try {
-      print('📂 Attempting to open file: $filePath');
+      debugPrint('📂 Attempting to open file: $filePath');
       
       final file = File(filePath);
       if (!await file.exists()) {
@@ -282,13 +283,13 @@ class ExcelDownloadService {
       }
       
       final result = await OpenFile.open(filePath);
-      print('📱 Open file result: ${result.type} - ${result.message}');
+      debugPrint('📱 Open file result: ${result.type} - ${result.message}');
       
       if (result.type != ResultType.done) {
         throw Exception('Could not open file: ${result.message}');
       }
     } catch (e) {
-      print('❌ Error opening file: $e');
+      debugPrint('❌ Error opening file: $e');
       throw Exception('Failed to open file: $e');
     }
   }
@@ -327,10 +328,10 @@ class ExcelDownloadService {
       final file = File(filePath);
       if (await file.exists()) {
         await file.delete();
-        print('🗑️ File deleted: $filePath');
+        debugPrint('🗑️ File deleted: $filePath');
       }
     } catch (e) {
-      print('❌ Error deleting file: $e');
+      debugPrint('❌ Error deleting file: $e');
       throw Exception('Failed to delete file: $e');
     }
   }

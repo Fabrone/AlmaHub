@@ -505,6 +505,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         badgeColor = Colors.green;
         badgeIcon = Icons.supervisor_account;
         break;
+      case 'Accountant':
+        badgeColor = Colors.orange;
+        badgeIcon = Icons.account_balance_wallet;
+        break;
       default:
         badgeColor = Colors.grey;
         badgeIcon = Icons.person;

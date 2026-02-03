@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:almahub/models/user_model.dart';
 import 'package:almahub/screens/employee/employee_dashboard.dart';
 import 'package:almahub/screens/hr/hr_dashboard.dart';
+import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
+import 'package:almahub/screens/accountant/accountant_dashboard.dart';
 import 'dart:async';
 
 /// Role selection screen - Only accessible by Admin users
@@ -378,41 +380,94 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   
                   // Role selection cards
                   Container(
-                    constraints: const BoxConstraints(maxWidth: 600),
+                    constraints: const BoxConstraints(maxWidth: 800),
                     child: Column(
                       children: [
-                        _buildRoleCard(
-                          context: context,
-                          icon: Icons.person,
-                          title: 'Employee',
-                          description: 'Fill out your onboarding application',
-                          color: const Color.fromARGB(255, 93, 4, 128),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const EmployeeDashboard(),
+                        // First Row: Employee and HR Admin
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildRoleCard(
+                                context: context,
+                                icon: Icons.person,
+                                title: 'Employee',
+                                description: 'Fill out your onboarding application',
+                                color: const Color.fromARGB(255, 93, 4, 128),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const EmployeeDashboard(),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildRoleCard(
+                                context: context,
+                                icon: Icons.admin_panel_settings,
+                                title: 'HR Admin',
+                                description: 'Manage employee applications',
+                                color: const Color.fromARGB(255, 98, 15, 153),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const Scaffold(
+                                        body: HRDashboard(),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 24),
-                        _buildRoleCard(
-                          context: context,
-                          icon: Icons.admin_panel_settings,
-                          title: 'HR Admin',
-                          description: 'Manage employee applications',
-                          color: const Color.fromARGB(255, 98, 15, 153),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const Scaffold(
-                                  body: HRDashboard(),
-                                ),
+                        const SizedBox(height: 16),
+                        
+                        // Second Row: Supervisor and Accountant
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildRoleCard(
+                                context: context,
+                                icon: Icons.supervisor_account,
+                                title: 'Supervisor',
+                                description: 'Manage and monitor your team',
+                                color: const Color.fromARGB(255, 46, 125, 50),
+                                badge: 'Coming Soon',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const SupervisorDashboard(),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildRoleCard(
+                                context: context,
+                                icon: Icons.account_balance_wallet,
+                                title: 'Accountant',
+                                description: 'Manage payroll and finances',
+                                color: const Color.fromARGB(255, 230, 81, 0),
+                                badge: 'Coming Soon',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const AccountantDashboard(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -444,67 +499,105 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     required String description,
     required Color color,
     required VoidCallback onTap,
+    String? badge,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
+              // Icon and Badge Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 32,
+                      color: color,
+                    ),
+                  ),
+                  if (badge != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.amber,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        badge,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Title
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color.fromARGB(255, 86, 26, 126),
                 ),
+              ),
+              const SizedBox(height: 8),
+              
+              // Description
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              
+              // Arrow Icon
+              Align(
+                alignment: Alignment.centerRight,
                 child: Icon(
-                  icon,
-                  size: 48,
+                  Icons.arrow_forward_ios,
                   color: color,
+                  size: 18,
                 ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color.fromARGB(255, 86, 26, 126),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: color,
-                size: 24,
               ),
             ],
           ),

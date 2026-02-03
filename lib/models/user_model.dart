@@ -49,6 +49,9 @@ class AppUser {
   /// Check if user has Supervisor role
   bool get isSupervisor => role == 'Supervisor';
 
+  /// Check if user has Accountant role
+  bool get isAccountant => role == 'Accountant';
+
   /// Check if user has Employee role
   bool get isEmployee => role == 'Employee';
 
@@ -77,9 +80,10 @@ class UserRoles {
   static const String admin = 'Admin';
   static const String hr = 'HR';
   static const String supervisor = 'Supervisor';
+  static const String accountant = 'Accountant';
   static const String employee = 'Employee';
 
-  static List<String> get allRoles => [admin, hr, supervisor, employee];
+  static List<String> get allRoles => [admin, hr, supervisor, accountant, employee];
 
   static bool isValidRole(String role) {
     return allRoles.contains(role);
