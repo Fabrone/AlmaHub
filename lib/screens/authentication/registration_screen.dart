@@ -1,5 +1,7 @@
 import 'package:almahub/screens/authentication/login_screen.dart';
-import 'package:almahub/screens/role_selection_screen.dart';
+//import 'package:almahub/screens/role_selection_screen.dart';
+import 'package:almahub/screens/employee/employee_dashboard.dart';
+import 'package:almahub/models/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -107,7 +109,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
     _logger.i('Registration process starting for username: $username');
 
     try {
-      // ✅ ONLY CHECK DRAFT COLLECTION - No Users collection
+      // ✅ STEP 1: CHECK IF USERNAME EXISTS IN DRAFT COLLECTION
       _logger.d('Checking if username exists in Draft collection: $usernameDocId');
       final existingDraftDoc = await FirebaseFirestore.instance
           .collection('Draft')
@@ -120,7 +122,20 @@ class RegistrationScreenState extends State<RegistrationScreen>
       }
       _logger.d('Username is available in Draft collection: $usernameDocId');
 
-      // Create user with email and password
+      // ✅ STEP 2: CHECK IF USERNAME EXISTS IN USERS COLLECTION
+      _logger.d('Checking if username exists in Users collection: $usernameDocId');
+      final existingUserDoc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(usernameDocId)
+          .get();
+
+      if (existingUserDoc.exists) {
+        _logger.w('Username already exists in Users: $usernameDocId');
+        throw Exception('Username already taken');
+      }
+      _logger.d('Username is available in Users collection: $usernameDocId');
+
+      // ✅ STEP 3: CREATE FIREBASE AUTH USER
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
       _logger.i('Creating Firebase Auth user with email: $email');
@@ -136,7 +151,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
       }
       _logger.d('User UID obtained: ${user.uid}');
 
-      // ✅ CREATE DRAFT DOCUMENT ONLY (with complete structure)
+      // ✅ STEP 4: CREATE DRAFT DOCUMENT (with complete structure)
       final draftData = {
         'id': usernameDocId,
         'status': 'draft',
@@ -150,7 +165,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
         'uid': user.uid, // Store Firebase Auth UID
         
         'personalInfo': {
-          'fullName': '',
+          'fullName': username, // ✅ Pre-fill fullName with username
           'nationalIdOrPassport': '',
           'idDocumentUrl': null,
           'dateOfBirth': null,
@@ -234,10 +249,28 @@ class RegistrationScreenState extends State<RegistrationScreen>
           .set(draftData);
       _logger.i('✅ Draft document created successfully for: $usernameDocId');
 
+      // ✅ STEP 5: CREATE USER DOCUMENT IN USERS COLLECTION
+      _logger.i('Creating Users collection document for: $usernameDocId');
+      
+      final appUser = AppUser(
+        uid: user.uid,
+        email: email,
+        fullName: username,
+        role: UserRoles.employee, // ✅ Default role is Employee
+        createdAt: DateTime.now(),
+      );
+
+      await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(usernameDocId)
+          .set(appUser.toMap());
+      
+      _logger.i('✅ Users document created successfully for: $usernameDocId');
+      _logger.d('User role set to: ${UserRoles.employee}');
+
       if (mounted) {
-        _logger.i(
-          'Showing success message and navigating to RoleSelectionScreen',
-        );
+        _logger.i('Showing success message and navigating based on role');
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome to JV Almacis, $username!'),
@@ -247,10 +280,15 @@ class RegistrationScreenState extends State<RegistrationScreen>
           ),
         );
 
+        // ✅ STEP 6: REDIRECT BASED ON ROLE
+        // New users always get Employee role, so redirect to Employee Dashboard
+        _logger.i('Redirecting new Employee to Employee Dashboard');
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+          MaterialPageRoute(
+            builder: (context) => const EmployeeDashboard(),
+          ),
         );
-        _logger.i('Navigation to RoleSelectionScreen completed');
+        _logger.i('Navigation to EmployeeDashboard completed');
       }
     } on FirebaseAuthException catch (e, stackTrace) {
       _logger.e(

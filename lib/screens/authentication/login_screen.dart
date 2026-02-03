@@ -1,5 +1,7 @@
 import 'package:almahub/screens/authentication/registration_screen.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
+import 'package:almahub/screens/employee/employee_dashboard.dart';
+import 'package:almahub/models/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -62,6 +64,40 @@ class LoginScreenState extends State<LoginScreen>
     final formatted = username.replaceAll('_', ' ');
     _logger.d('Formatted username for display: "$username" -> "$formatted"');
     return formatted;
+  }
+
+  /// Search for user data in Users collection and get their role
+  Future<AppUser?> _getUserByUid(String uid) async {
+    _logger.i('Searching for user with UID: $uid in Users collection');
+
+    try {
+      // Query Users collection by UID field
+      final userQuery = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('uid', isEqualTo: uid)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isNotEmpty) {
+        final userDoc = userQuery.docs.first;
+        final userData = userDoc.data();
+        
+        _logger.i('✅ User found in Users collection');
+        _logger.d('User document ID: ${userDoc.id}');
+        _logger.d('User role: ${userData['role']}');
+        _logger.d('User email: ${userData['email']}');
+        _logger.d('User fullName: ${userData['fullName']}');
+
+        return AppUser.fromMap(userData);
+      } else {
+        _logger.e('❌ User not found in Users collection for UID: $uid');
+        return null;
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Error searching for user in Users collection', 
+        error: e, stackTrace: stackTrace);
+      return null;
+    }
   }
 
   /// Search for user data in both Draft and EmployeeDetails collections
@@ -246,7 +282,21 @@ class LoginScreenState extends State<LoginScreen>
       _logger.d('User email: ${user.email}');
       _logger.d('Email verified: ${user.emailVerified}');
 
-      // Step 2: Find user data in Draft or EmployeeDetails collections
+      // Step 2: Get user role from Users collection
+      _logger.i('Fetching user role from Users collection');
+      final appUser = await _getUserByUid(user.uid);
+
+      if (appUser == null) {
+        _logger.e('❌ User not found in Users collection');
+        throw Exception(
+            'User profile not found. Please contact support or re-register.');
+      }
+
+      _logger.i('✅ User role retrieved: ${appUser.role}');
+      _logger.d('User fullName: ${appUser.fullName}');
+      _logger.d('User email: ${appUser.email}');
+
+      // Step 3: Find user data in Draft or EmployeeDetails collections
       _logger.i('Searching for user data in Firestore collections');
       final userData = await _findUserDataByEmail(email, user.uid);
 
@@ -257,7 +307,7 @@ class LoginScreenState extends State<LoginScreen>
             'User profile not found. Please contact support or re-register.');
       }
 
-      // Step 3: Extract user information
+      // Step 4: Extract user information
       final collection = userData['collection'] as String;
       final documentId = userData['documentId'] as String;
       final username = userData['username'] as String;
@@ -269,9 +319,9 @@ class LoginScreenState extends State<LoginScreen>
       _logger.i('Username: $username');
       _logger.i('Status: $status');
 
-      // Step 4: Navigate to appropriate screen
+      // Step 5: Navigate based on role
       if (mounted) {
-        _logger.i('Preparing to navigate to RoleSelectionScreen');
+        _logger.i('Preparing to navigate based on role: ${appUser.role}');
 
         // Show welcome message
         final displayUsername = _formatUsernameForDisplay(username);
@@ -285,15 +335,25 @@ class LoginScreenState extends State<LoginScreen>
         );
 
         _logger.d('Displayed welcome message for: $displayUsername');
-        _logger.d('Login status: ${status ?? "unknown"}');
 
-        // Navigate to role selection
-        _logger.i('Navigating to RoleSelectionScreen');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const RoleSelectionScreen(),
-          ),
-        );
+        // ✅ ROLE-BASED NAVIGATION
+        if (appUser.isAdmin) {
+          // Admin users go to Role Selection Screen
+          _logger.i('Navigating Admin user to RoleSelectionScreen');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const RoleSelectionScreen(),
+            ),
+          );
+        } else {
+          // All other users (Employee, HR, Supervisor) go to Employee Dashboard
+          _logger.i('Navigating ${appUser.role} user to EmployeeDashboard');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const EmployeeDashboard(),
+            ),
+          );
+        }
 
         _logger.i('✅ Login process completed successfully');
       }

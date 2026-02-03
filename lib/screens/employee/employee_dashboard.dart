@@ -1,10 +1,13 @@
 import 'package:almahub/models/employee_onboarding_models.dart';
+import 'package:almahub/models/user_model.dart';
 import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
+import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
+import 'dart:async';
 
 /// Employee dashboard for viewing and managing their onboarding application
 class EmployeeDashboard extends StatefulWidget {
@@ -36,6 +39,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  
+  // ✅ NEW: Role monitoring
+  StreamSubscription<DocumentSnapshot>? _roleListener;
+  String? _currentUserRole;
+  bool _isCheckingRole = true;
 
   @override
   void initState() {
@@ -59,18 +67,170 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     );
 
     _animationController.forward();
+    
+    // ✅ NEW: Setup role listener
+    _setupRoleListener();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _roleListener?.cancel(); // ✅ NEW: Cancel listener
     _logger.i('EmployeeDashboard disposed');
     super.dispose();
+  }
+
+  // ✅ NEW: Setup realtime role monitoring
+  void _setupRoleListener() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
+    if (currentUser == null) {
+      _logger.e('No authenticated user found');
+      if (mounted) {
+        setState(() => _isCheckingRole = false);
+      }
+      return;
+    }
+
+    try {
+      _logger.i('Setting up role listener for user: ${currentUser.uid}');
+      
+      // Find user document in Users collection by UID
+      final userQuery = await _firestore
+          .collection('Users')
+          .where('uid', isEqualTo: currentUser.uid)
+          .limit(1)
+          .get();
+
+      if (userQuery.docs.isEmpty) {
+        _logger.w('User not found in Users collection');
+        if (mounted) {
+          setState(() => _isCheckingRole = false);
+        }
+        return;
+      }
+
+      final userDocId = userQuery.docs.first.id;
+      _logger.d('Found user document: $userDocId');
+
+      // Set up realtime listener on the user document
+      _roleListener = _firestore
+          .collection('Users')
+          .doc(userDocId)
+          .snapshots()
+          .listen((docSnapshot) {
+        if (!mounted) return;
+
+        if (!docSnapshot.exists) {
+          _logger.e('User document no longer exists');
+          return;
+        }
+
+        final userData = docSnapshot.data() as Map<String, dynamic>;
+        final newRole = userData['role'] as String?;
+
+        _logger.i('Role update detected: $newRole (previous: $_currentUserRole)');
+
+        // Check if role has changed
+        if (_currentUserRole != null && _currentUserRole != newRole) {
+          _logger.i('Role changed from $_currentUserRole to $newRole');
+          _handleRoleChange(newRole);
+        }
+
+        setState(() {
+          _currentUserRole = newRole;
+          _isCheckingRole = false;
+        });
+      }, onError: (error) {
+        _logger.e('Error in role listener', error: error);
+        if (mounted) {
+          setState(() => _isCheckingRole = false);
+        }
+      });
+    } catch (e, stackTrace) {
+      _logger.e('Error setting up role listener', error: e, stackTrace: stackTrace);
+      if (mounted) {
+        setState(() => _isCheckingRole = false);
+      }
+    }
+  }
+
+  // ✅ NEW: Handle role changes
+  void _handleRoleChange(String? newRole) {
+    if (newRole == null) return;
+
+    _logger.i('Handling role change to: $newRole');
+
+    // Show notification about role change
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Your role has been updated to: $newRole'),
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
+
+    // If promoted to Admin, navigate to Role Selection Screen
+    if (newRole == UserRoles.admin) {
+      _logger.i('User promoted to Admin, navigating to RoleSelectionScreen');
+      
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const RoleSelectionScreen(),
+            ),
+          );
+        }
+      });
+    }
+    
+    // For other role changes (HR, Supervisor), just refresh the UI
+    // The dashboard can show different features based on role
+    else {
+      _logger.d('Role changed to $newRole, refreshing UI');
+      setState(() {
+        // Trigger rebuild to show role-specific features
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     _logger.d('Building EmployeeDashboard widget');
+    
+    // ✅ NEW: Show loading while checking role
+    if (_isCheckingRole) {
+      return Scaffold(
+        backgroundColor: const Color.fromARGB(255, 245, 245, 250),
+        appBar: _buildModernAppBar(),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: Color.fromARGB(255, 84, 4, 108),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 245, 245, 250),
       appBar: _buildModernAppBar(),
@@ -102,11 +262,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
             ),
           ),
           const SizedBox(width: 12),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
+              const Text(
                 'My Profile',
                 style: TextStyle(
                   fontSize: 18,
@@ -114,9 +274,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
                   color: Colors.white,
                 ),
               ),
+              // ✅ NEW: Show current role
               Text(
-                'Onboarding Application',
-                style: TextStyle(
+                _currentUserRole != null 
+                    ? 'Role: $_currentUserRole' 
+                    : 'Onboarding Application',
+                style: const TextStyle(
                   fontSize: 12,
                   color: Colors.white70,
                   fontWeight: FontWeight.w400,
@@ -127,6 +290,21 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         ],
       ),
       actions: [
+        // ✅ NEW: Show Admin icon if user is Admin
+        if (_currentUserRole == UserRoles.admin)
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
+            onPressed: () {
+              _logger.i('Admin navigating to RoleSelectionScreen');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const RoleSelectionScreen(),
+                ),
+              );
+            },
+            tooltip: 'Admin Panel',
+          ),
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.white),
           onPressed: () {
@@ -263,6 +441,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
             // User has at least one application - don't show create button
             return Column(
               children: [
+                // ✅ NEW: Show role badge if not Employee
+                if (_currentUserRole != null && _currentUserRole != UserRoles.employee)
+                  _buildRoleBadge(_currentUserRole!),
+                
                 // Animated draft reminder if there are drafts
                 if (hasDrafts) _buildDraftReminder(),
                 
@@ -302,6 +484,91 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
           },
         );
       },
+    );
+  }
+
+  // ✅ NEW: Role badge widget
+  Widget _buildRoleBadge(String role) {
+    Color badgeColor;
+    IconData badgeIcon;
+    
+    switch (role) {
+      case 'Admin':
+        badgeColor = Colors.amber;
+        badgeIcon = Icons.admin_panel_settings;
+        break;
+      case 'HR':
+        badgeColor = Colors.blue;
+        badgeIcon = Icons.business_center;
+        break;
+      case 'Supervisor':
+        badgeColor = Colors.green;
+        badgeIcon = Icons.supervisor_account;
+        break;
+      default:
+        badgeColor = Colors.grey;
+        badgeIcon = Icons.person;
+    }
+
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              badgeColor.withValues(alpha: 0.1),
+              badgeColor.withValues(alpha: 0.2),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: badgeColor,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                badgeIcon,
+                color: badgeColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$role Access',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: badgeColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'You have extended privileges in the system',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
