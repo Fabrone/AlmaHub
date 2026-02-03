@@ -258,38 +258,78 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
       );
     }
     
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: const Text(
-          'Employee Onboarding Form',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: const Color.fromARGB(255, 84, 4, 108),
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          _buildProgressIndicator(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildPersonalInfoStep(),
-                _buildEmploymentDetailsStep(),
-                _buildStatutoryDocsStep(),
-                _buildPayrollDetailsStep(),
-                _buildAcademicDocsStep(),
-                _buildContractsFormsStep(),
-                _buildBenefitsInsuranceStep(),
-                _buildWorkToolsStep(),
-              ],
-            ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) return;
+        
+        // Check mounted before async operation
+        if (!mounted) return;
+        
+        // Capture navigator before async gap
+        final navigator = Navigator.of(context);
+        
+        final shouldPop = await _onWillPop();
+        
+        // Check mounted after async operation
+        if (!mounted) return;
+        
+        if (shouldPop) {
+          navigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey.shade50,
+        appBar: AppBar(
+          title: const Text(
+            'Employee Onboarding Form',
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          _buildNavigationButtons(),
-        ],
+          backgroundColor: const Color.fromARGB(255, 84, 4, 108),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+            onPressed: () async {
+              // Check mounted before async
+              if (!mounted) return;
+              
+              // Capture navigator before async gap
+              final navigator = Navigator.of(context);
+              
+              final shouldPop = await _onWillPop();
+              
+              // Check mounted after async
+              if (!mounted) return;
+              
+              if (shouldPop) {
+                navigator.pop();
+              }
+            },
+          ),
+        ),
+        body: Column(
+          children: [
+            _buildProgressIndicator(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildPersonalInfoStep(),
+                  _buildEmploymentDetailsStep(),
+                  _buildStatutoryDocsStep(),
+                  _buildPayrollDetailsStep(),
+                  _buildAcademicDocsStep(),
+                  _buildContractsFormsStep(),
+                  _buildBenefitsInsuranceStep(),
+                  _buildWorkToolsStep(),
+                ],
+              ),
+            ),
+            _buildNavigationButtons(),
+          ],
+        ),
       ),
     );
   }
@@ -480,26 +520,169 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     }
   }
 
+  Future<bool> _onWillPop() async {
+    _logger.d('Back navigation detected - checking if draft save is needed');
+    
+    // Check if there's any data entered
+    final hasData = _hasAnyDataEntered();
+    
+    if (!hasData) {
+      _logger.i('No data entered - allowing navigation without prompt');
+      return true;
+    }
+    
+    _logger.i('Data detected - showing save draft prompt');
+    
+    // Show dialog to save draft
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange.shade700,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Text('Unsaved Changes'),
+          ],
+        ),
+        content: const Text(
+          'You have unsaved changes in your onboarding form. Would you like to save them as a draft before leaving?',
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'discard'),
+            child: Text(
+              'Discard',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey.shade700,
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, 'save'),
+            icon: const Icon(Icons.save, size: 20),
+            label: const Text('Save Draft'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 84, 4, 108),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        ],
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
+    );
+    
+    if (result == 'save') {
+      _logger.i('User chose to save draft before leaving');
+      
+      // Save all current form states
+      for (var formKey in _formKeys) {
+        formKey.currentState?.save();
+      }
+      
+      // Save as draft
+      await _saveAsDraft();
+      
+      return true;
+    } else if (result == 'discard') {
+      _logger.i('User chose to discard changes');
+      return true;
+    } else {
+      _logger.i('User cancelled navigation');
+      return false;
+    }
+  }
+
+  /// Check if user has entered any data in the form
+  bool _hasAnyDataEntered() {
+    // Check personal info
+    if (_personalInfo.fullName.isNotEmpty ||
+        _personalInfo.nationalIdOrPassport.isNotEmpty ||
+        _personalInfo.phoneNumber.isNotEmpty ||
+        _personalInfo.email.isNotEmpty) {
+      return true;
+    }
+    
+    // Check employment details
+    if (_employmentDetails.jobTitle.isNotEmpty ||
+        _employmentDetails.department.isNotEmpty) {
+      return true;
+    }
+    
+    // Check statutory docs
+    if (_statutoryDocs.kraPinNumber.isNotEmpty ||
+        _statutoryDocs.nssfNumber.isNotEmpty ||
+        _statutoryDocs.nhifNumber.isNotEmpty) {
+      return true;
+    }
+    
+    // Check payroll details
+    if (_payrollDetails.basicSalary > 0) {
+      return true;
+    }
+    
+    // Check academic docs
+    if (_academicDocs.academicCertificates.isNotEmpty ||
+        _academicDocs.professionalCertificates.isNotEmpty) {
+      return true;
+    }
+    
+    // Check contracts
+    if (_contractsForms.employmentContractUrl!.isNotEmpty ||
+        _contractsForms.codeOfConductAcknowledged ||
+        _contractsForms.dataProtectionConsentGiven) {
+      return true;
+    }
+    
+    // Check benefits
+    if (_benefitsInsurance.nhifDependants.isNotEmpty ||
+        _benefitsInsurance.beneficiaries.isNotEmpty) {
+      return true;
+    }
+    
+    // Check work tools
+    if (_workTools.issuedEquipment.isNotEmpty ||
+        _workTools.hrisProfileCreated ||
+        _workTools.systemAccessGranted) {
+      return true;
+    }
+    
+    return false;
+  }
+
   void _nextStep() {
     _logger.d('Attempting to move to next step from step ${_currentStep + 1}');
-    _logger.d('Validating current step form...');
     
-    if (_formKeys[_currentStep].currentState?.validate() ?? false) {
-      _logger.i('Step ${_currentStep + 1} validation passed');
-      
-      if (_currentStep < _totalSteps - 1) {
-        setState(() {
-          _currentStep++;
-          _pageController.animateToPage(
-            _currentStep,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        });
-        _logger.i('Moved to step ${_currentStep + 1}: ${_getStepTitle(_currentStep)}');
-      }
-    } else {
-      _logger.w('Step ${_currentStep + 1} validation FAILED');
+    // Save current form state without validation
+    _formKeys[_currentStep].currentState?.save();
+    _logger.i('Step ${_currentStep + 1} data saved (validation skipped for free navigation)');
+    
+    if (_currentStep < _totalSteps - 1) {
+      setState(() {
+        _currentStep++;
+        _pageController.animateToPage(
+          _currentStep,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      });
+      _logger.i('Moved to step ${_currentStep + 1}: ${_getStepTitle(_currentStep)}');
     }
   }
 
@@ -643,35 +826,61 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
       _logger.i('Final step validation passed');
       _formKeys[_currentStep].currentState?.save();
 
+      // Save all form states first
+      for (var formKey in _formKeys) {
+        formKey.currentState?.save();
+      }
+
       // Validate all required fields across all steps
       _logger.d('Validating all required fields...');
       bool isValid = true;
       String errorMessage = '';
+      int errorStep = 0;
 
       if (_personalInfo.fullName.isEmpty) {
         isValid = false;
-        errorMessage = 'Please complete Personal Information';
+        errorMessage = 'Please complete Personal Information (Full Name required)';
+        errorStep = 0;
         _logger.w('Validation failed: Personal Information incomplete');
       } else if (_employmentDetails.jobTitle.isEmpty) {
         isValid = false;
-        errorMessage = 'Please complete Employment Details';
+        errorMessage = 'Please complete Employment Details (Job Title required)';
+        errorStep = 1;
         _logger.w('Validation failed: Employment Details incomplete');
       } else if (_statutoryDocs.kraPinNumber.isEmpty) {
         isValid = false;
-        errorMessage = 'Please complete Statutory Documents';
+        errorMessage = 'Please complete Statutory Documents (KRA PIN required)';
+        errorStep = 2;
         _logger.w('Validation failed: Statutory Documents incomplete');
       } else if (_payrollDetails.basicSalary <= 0) {
         isValid = false;
-        errorMessage = 'Please complete Payroll Details';
+        errorMessage = 'Please complete Payroll Details (Basic Salary required)';
+        errorStep = 3;
         _logger.w('Validation failed: Payroll Details incomplete');
       }
 
       if (!isValid) {
         _logger.w('Overall validation FAILED: $errorMessage');
+        
+        // Show error and navigate to the step with missing data
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
             backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Go to Step',
+              textColor: Colors.white,
+              onPressed: () {
+                setState(() {
+                  _currentStep = errorStep;
+                  _pageController.animateToPage(
+                    _currentStep,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                });
+              },
+            ),
           ),
         );
         return;
