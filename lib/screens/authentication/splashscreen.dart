@@ -239,10 +239,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color.fromARGB(255, 112, 28, 164), // Darkest purple
+              Color.fromARGB(255, 66, 10, 113),
+              Color.fromARGB(255, 132, 69, 161),
               Color.fromARGB(255, 95, 24, 150),
-              Color.fromARGB(255, 107, 14, 160),
-              Color.fromARGB(255, 117, 20, 166),
+              Color.fromARGB(255, 66, 10, 113),
             ],
             stops: [0.0, 0.3, 0.6, 1.0],
           ),
@@ -259,129 +259,191 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   final availableHeight = constraints.maxHeight;
                   final availableWidth = constraints.maxWidth;
                   
-                  // Calculate responsive sizes
-                  final logoSize = (availableWidth * 0.2).clamp(60.0, 100.0);
-                  final titleFontSize = (availableWidth * 0.12).clamp(32.0, 56.0);
-                  final subtitleFontSize = (availableWidth * 0.04).clamp(14.0, 18.0);
+                  // Calculate responsive sizes based on screen dimensions
+                  final isSmallScreen = availableWidth < 360;
+                  final isMediumScreen = availableWidth >= 360 && availableWidth < 600;
+                  final isLargeScreen = availableWidth >= 600;
+                  
+                  // Adaptive sizing
+                  final logoSize = isSmallScreen 
+                      ? 50.0 
+                      : isMediumScreen 
+                          ? 60.0 
+                          : 70.0;
+                  
+                  final titleFontSize = isSmallScreen 
+                      ? 32.0 
+                      : isMediumScreen 
+                          ? 40.0 
+                          : 48.0;
+                  
+                  final subtitleFontSize = isSmallScreen 
+                      ? 13.0 
+                      : isMediumScreen 
+                          ? 15.0 
+                          : 16.0;
+                  
+                  final taglineFontSize = isSmallScreen 
+                      ? 11.0 
+                      : isMediumScreen 
+                          ? 12.0 
+                          : 13.0;
                   
                   return Center(
                     child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
                           minHeight: availableHeight,
+                          maxWidth: isLargeScreen ? 600 : availableWidth,
                         ),
-                        child: IntrinsicHeight(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: availableWidth * 0.08,
+                            vertical: availableHeight * 0.05,
+                          ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Spacer(flex: 2),
+                              SizedBox(height: availableHeight * 0.1),
                               
-                              // Animated logo
+                              // Animated logo with improved design
                               ScaleTransition(
                                 scale: _logoAnimation,
                                 child: Container(
-                                  padding: EdgeInsets.all(availableWidth * 0.06),
+                                  padding: EdgeInsets.all(isSmallScreen ? 20 : 24),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.15),
+                                    color: Colors.white.withValues(alpha: 0.12),
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.white.withValues(alpha: 0.2),
+                                        color: Colors.white.withValues(alpha: 0.25),
+                                        blurRadius: 30,
+                                        spreadRadius: 5,
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.purple.withValues(alpha: 0.3),
                                         blurRadius: 40,
-                                        spreadRadius: 10,
+                                        spreadRadius: -5,
                                       ),
                                     ],
                                   ),
                                   child: Container(
-                                    padding: EdgeInsets.all(availableWidth * 0.05),
-                                    decoration: const BoxDecoration(
+                                    padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                                    decoration: BoxDecoration(
                                       color: Colors.white,
                                       shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.1),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
                                     ),
                                     child: Icon(
-                                      Icons.business_center_rounded,
+                                      Icons.business_center,
                                       size: logoSize,
-                                      color: const Color.fromARGB(255, 112, 28, 164),
+                                      color: const Color.fromARGB(255, 66, 10, 113),
                                     ),
                                   ),
                                 ),
                               ),
                               
-                              SizedBox(height: availableHeight * 0.06),
+                              SizedBox(height: availableHeight * 0.05),
                               
                               // Animated company name
                               FadeTransition(
                                 opacity: _textFadeAnimation,
                                 child: SlideTransition(
                                   position: _textSlideAnimation,
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: availableWidth * 0.05),
-                                    child: Column(
-                                      children: [
-                                        ShaderMask(
-                                          shaderCallback: (bounds) => const LinearGradient(
-                                            colors: [Colors.white, Color(0xFFE1BEE7)],
-                                          ).createShader(bounds),
-                                          child: Text(
-                                            'JV Almacis',
-                                            style: TextStyle(
-                                              fontSize: titleFontSize,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                              letterSpacing: 3,
-                                              shadows: const [
-                                                Shadow(
-                                                  color: Colors.black26,
-                                                  offset: Offset(0, 4),
-                                                  blurRadius: 8,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(height: availableHeight * 0.02),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: availableWidth * 0.05,
-                                            vertical: availableHeight * 0.01,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: Colors.white.withValues(alpha: 0.3),
-                                              width: 1,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Employee Onboarding System',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: subtitleFontSize,
-                                              color: Colors.white.withValues(alpha: 0.95),
-                                              letterSpacing: 1.5,
-                                              fontWeight: FontWeight.w300,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(height: availableHeight * 0.01),
-                                        Text(
-                                          'Italian Excellence, Global Reach',
+                                  child: Column(
+                                    children: [
+                                      ShaderMask(
+                                        shaderCallback: (bounds) => const LinearGradient(
+                                          colors: [
+                                            Colors.white,
+                                            Color(0xFFE1BEE7),
+                                            Colors.white,
+                                          ],
+                                          stops: [0.0, 0.5, 1.0],
+                                        ).createShader(bounds),
+                                        child: Text(
+                                          'JV Almacis',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            fontSize: subtitleFontSize * 0.78,
-                                            color: Colors.white.withValues(alpha: 0.7),
-                                            letterSpacing: 1,
-                                            fontStyle: FontStyle.italic,
+                                            fontSize: titleFontSize,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 2,
+                                            height: 1.2,
+                                            shadows: const [
+                                              Shadow(
+                                                color: Colors.black26,
+                                                offset: Offset(0, 3),
+                                                blurRadius: 6,
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                      
+                                      SizedBox(height: availableHeight * 0.025),
+                                      
+                                      // Subtitle badge
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: isSmallScreen ? 16 : 20,
+                                          vertical: isSmallScreen ? 8 : 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(25),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.4),
+                                            width: 1.5,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.1),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          'Employee Onboarding System',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: subtitleFontSize,
+                                            color: Colors.white.withValues(alpha: 0.95),
+                                            letterSpacing: 1.2,
+                                            fontWeight: FontWeight.w400,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ),
+                                      
+                                      SizedBox(height: availableHeight * 0.015),
+                                      
+                                      // Tagline
+                                      Text(
+                                        'Italian Excellence, Global Reach',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: taglineFontSize,
+                                          color: Colors.white.withValues(alpha: 0.75),
+                                          letterSpacing: 0.8,
+                                          fontStyle: FontStyle.italic,
+                                          fontWeight: FontWeight.w300,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                               
-                              const Spacer(flex: 2),
+                              SizedBox(height: availableHeight * 0.12),
                               
                               // Animated loading indicator
                               FadeTransition(
@@ -389,8 +451,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 child: Column(
                                   children: [
                                     SizedBox(
-                                      width: 50,
-                                      height: 50,
+                                      width: isSmallScreen ? 40 : 45,
+                                      height: isSmallScreen ? 40 : 45,
                                       child: CircularProgressIndicator(
                                         valueColor: AlwaysStoppedAnimation<Color>(
                                           Colors.white.withValues(alpha: 0.9),
@@ -401,17 +463,19 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                     SizedBox(height: availableHeight * 0.025),
                                     Text(
                                       'Loading your workspace...',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        fontSize: subtitleFontSize * 0.78,
+                                        fontSize: taglineFontSize,
                                         color: Colors.white.withValues(alpha: 0.8),
                                         letterSpacing: 0.5,
+                                        fontWeight: FontWeight.w300,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                               
-                              SizedBox(height: availableHeight * 0.08),
+                              SizedBox(height: availableHeight * 0.1),
                             ],
                           ),
                         ),
@@ -419,26 +483,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     ),
                   );
                 },
-              ),
-              
-              // Version text at bottom
-              Positioned(
-                bottom: 30,
-                left: 0,
-                right: 0,
-                child: FadeTransition(
-                  opacity: _textFadeAnimation,
-                  child: Center(
-                    child: Text(
-                      'v1.0.0 © 2026 JV Almacis',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.5),
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
@@ -450,6 +494,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Widget _buildBackgroundCircles() {
     return Stack(
       children: [
+        // Top right circle
         Positioned(
           top: -100,
           right: -100,
@@ -462,14 +507,18 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.white.withValues(alpha: 0.1),
+                    Colors.white.withValues(alpha: 0.08),
+                    Colors.purple.withValues(alpha: 0.05),
                     Colors.transparent,
                   ],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),
           ),
         ),
+        
+        // Bottom left circle
         Positioned(
           bottom: -150,
           left: -150,
@@ -482,14 +531,18 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.white.withValues(alpha: 0.08),
+                    Colors.white.withValues(alpha: 0.06),
+                    Colors.purple.withValues(alpha: 0.04),
                     Colors.transparent,
                   ],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),
           ),
         ),
+        
+        // Middle left circle
         Positioned(
           top: MediaQuery.of(context).size.height * 0.3,
           left: -80,
@@ -500,7 +553,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withValues(alpha: 0.05),
+                  Colors.white.withValues(alpha: 0.04),
                   Colors.transparent,
                 ],
               ),

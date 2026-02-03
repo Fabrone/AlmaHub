@@ -333,50 +333,61 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Logo/Icon
-                  Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                  // Logo/Icon + Title/Subtitle (Horizontal Layout)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Logo/Icon
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.business_center,
-                      size: 80,
-                      color: Color.fromARGB(255, 66, 4, 104),
-                    ),
+                        child: const Icon(
+                          Icons.business_center,
+                          size: 40,
+                          color: Color.fromARGB(255, 66, 4, 104),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      
+                      // Title and Subtitle
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'AlmaHub',
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Employee Onboarding System',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white.withValues(alpha: 0.9),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 40),
-                  
-                  // Title
-                  const Text(
-                    'AlmaHub',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Subtitle
-                  Text(
-                    'Employee Onboarding System',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white.withValues(alpha: 0.9),
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 60),
                   
                   // Role selection cards
                   Container(
@@ -505,17 +516,17 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -528,26 +539,26 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       icon,
-                      size: 32,
+                      size: 24,
                       color: color,
                     ),
                   ),
                   if (badge != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        horizontal: 6,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.amber.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                         border: Border.all(
                           color: Colors.amber,
                           width: 1,
@@ -556,7 +567,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       child: Text(
                         badge,
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.bold,
                           color: Colors.orange,
                         ),
@@ -564,31 +575,31 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               
               // Title
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Color.fromARGB(255, 86, 26, 126),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               
               // Description
               Text(
                 description,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: Colors.grey.shade600,
-                  height: 1.4,
+                  height: 1.3,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               
               // Arrow Icon
               Align(
@@ -596,7 +607,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                 child: Icon(
                   Icons.arrow_forward_ios,
                   color: color,
-                  size: 18,
+                  size: 14,
                 ),
               ),
             ],
