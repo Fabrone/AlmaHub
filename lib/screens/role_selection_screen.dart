@@ -1,3 +1,4 @@
+import 'package:almahub/screens/assign_role_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -376,7 +377,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Employee Onboarding System',
+                            'Admin Control Center',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.white.withValues(alpha: 0.9),
@@ -389,12 +390,65 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   ),
                   const SizedBox(height: 40),
                   
-                  // Role selection cards
+                  // Admin Management Section
                   Container(
-                    constraints: const BoxConstraints(maxWidth: 800),
+                    constraints: const BoxConstraints(maxWidth: 900),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // First Row: Employee and HR Admin
+                        // Section Title
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 12),
+                          child: Text(
+                            'ADMIN MANAGEMENT',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white.withValues(alpha: 0.8),
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                        
+                        // Manage Roles - Featured Card (Full Width)
+                        _buildFeaturedCard(
+                          context: context,
+                          icon: Icons.manage_accounts,
+                          title: 'Manage User Roles',
+                          description: 'Assign and update roles for all system users',
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color.fromARGB(255, 156, 39, 176),
+                              Color.fromARGB(255, 123, 31, 162),
+                            ],
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AssignRoleScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        
+                        const SizedBox(height: 32),
+                        
+                        // Section Title
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 12),
+                          child: Text(
+                            'DEPARTMENT VIEWS',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white.withValues(alpha: 0.8),
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                        
+                        // Department cards in 2x2 grid
                         Row(
                           children: [
                             Expanded(
@@ -402,7 +456,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                 context: context,
                                 icon: Icons.person,
                                 title: 'Employee',
-                                description: 'Fill out your onboarding application',
+                                description: 'View as employee',
                                 color: const Color.fromARGB(255, 93, 4, 128),
                                 onTap: () {
                                   Navigator.push(
@@ -420,7 +474,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                 context: context,
                                 icon: Icons.admin_panel_settings,
                                 title: 'HR Admin',
-                                description: 'Manage employee applications',
+                                description: 'Manage applications',
                                 color: const Color.fromARGB(255, 98, 15, 153),
                                 onTap: () {
                                   Navigator.push(
@@ -438,7 +492,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                         ),
                         const SizedBox(height: 16),
                         
-                        // Second Row: Supervisor and Accountant
                         Row(
                           children: [
                             Expanded(
@@ -446,7 +499,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                 context: context,
                                 icon: Icons.supervisor_account,
                                 title: 'Supervisor',
-                                description: 'Manage and monitor your team',
+                                description: 'Monitor teams',
                                 color: const Color.fromARGB(255, 46, 125, 50),
                                 badge: 'Coming Soon',
                                 onTap: () {
@@ -465,7 +518,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                 context: context,
                                 icon: Icons.account_balance_wallet,
                                 title: 'Accountant',
-                                description: 'Manage payroll and finances',
+                                description: 'Manage payroll',
                                 color: const Color.fromARGB(255, 230, 81, 0),
                                 badge: 'Coming Soon',
                                 onTap: () {
@@ -483,17 +536,16 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 32),
                   
                   // Footer note
                   Text(
-                    'Select your role to continue',
+                    'Select a section to continue',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white.withValues(alpha: 0.7),
                     ),
                   ),
-                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -503,6 +555,84 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     );
   }
 
+  // Featured card for Manage Roles
+  Widget _buildFeaturedCard({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required String description,
+    required Gradient gradient,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  size: 32,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white.withValues(alpha: 0.8),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Standard role card
   Widget _buildRoleCard({
     required BuildContext context,
     required IconData icon,
