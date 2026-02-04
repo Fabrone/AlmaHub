@@ -1,5 +1,4 @@
 import 'package:almahub/screens/authentication/login_screen.dart';
-//import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/employee/employee_dashboard.dart';
 import 'package:almahub/models/user_model.dart';
 import 'package:flutter/material.dart';
@@ -67,7 +66,6 @@ class RegistrationScreenState extends State<RegistrationScreen>
     return formatted;
   }
 
-  /// Validate username format (allows letters, numbers, spaces, and underscores)
   bool _isValidUsernameFormat(String username) {
     // Allow letters, numbers, spaces, and underscores
     final regex = RegExp(r'^[a-zA-Z0-9_ ]+$');
@@ -108,34 +106,10 @@ class RegistrationScreenState extends State<RegistrationScreen>
     });
     _logger.i('Registration process starting for username: $username');
 
+    User? user;
+
     try {
-      // ✅ STEP 1: CHECK IF USERNAME EXISTS IN DRAFT COLLECTION
-      _logger.d('Checking if username exists in Draft collection: $usernameDocId');
-      final existingDraftDoc = await FirebaseFirestore.instance
-          .collection('Draft')
-          .doc(usernameDocId)
-          .get();
-
-      if (existingDraftDoc.exists) {
-        _logger.w('Username already exists in Draft: $usernameDocId');
-        throw Exception('Username already taken');
-      }
-      _logger.d('Username is available in Draft collection: $usernameDocId');
-
-      // ✅ STEP 2: CHECK IF USERNAME EXISTS IN USERS COLLECTION
-      _logger.d('Checking if username exists in Users collection: $usernameDocId');
-      final existingUserDoc = await FirebaseFirestore.instance
-          .collection('Users')
-          .doc(usernameDocId)
-          .get();
-
-      if (existingUserDoc.exists) {
-        _logger.w('Username already exists in Users: $usernameDocId');
-        throw Exception('Username already taken');
-      }
-      _logger.d('Username is available in Users collection: $usernameDocId');
-
-      // ✅ STEP 3: CREATE FIREBASE AUTH USER
+      // STEP 1: CREATE FIREBASE AUTH USER FIRST
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
       _logger.i('Creating Firebase Auth user with email: $email');
@@ -144,14 +118,46 @@ class RegistrationScreenState extends State<RegistrationScreen>
           .createUserWithEmailAndPassword(email: email, password: password);
       _logger.i('Firebase Auth user created successfully');
 
-      final user = userCredential.user;
+      user = userCredential.user;
       if (user == null) {
         _logger.e('User credential returned null user');
         throw Exception('User creation failed');
       }
       _logger.d('User UID obtained: ${user.uid}');
 
-      // ✅ STEP 4: CREATE DRAFT DOCUMENT (with complete structure)
+      // STEP 2: CHECK IF USERNAME EXISTS IN DRAFT COLLECTION
+      _logger.d('Checking if username exists in Draft collection: $usernameDocId');
+      final existingDraftDoc = await FirebaseFirestore.instance
+          .collection('Draft')
+          .doc(usernameDocId)
+          .get();
+
+      if (existingDraftDoc.exists) {
+        _logger.w('Username already exists in Draft: $usernameDocId');
+        // Delete the auth user we just created since username is taken
+        await user.delete();
+        _logger.i('Deleted Firebase Auth user due to username conflict');
+        throw Exception('Username already taken');
+      }
+      _logger.d('Username is available in Draft collection: $usernameDocId');
+
+      // STEP 3: CHECK IF USERNAME EXISTS IN USERS COLLECTION
+      _logger.d('Checking if username exists in Users collection: $usernameDocId');
+      final existingUserDoc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(usernameDocId)
+          .get();
+
+      if (existingUserDoc.exists) {
+        _logger.w('Username already exists in Users: $usernameDocId');
+        // Delete the auth user we just created since username is taken
+        await user.delete();
+        _logger.i('Deleted Firebase Auth user due to username conflict');
+        throw Exception('Username already taken');
+      }
+      _logger.d('Username is available in Users collection: $usernameDocId');
+
+      // STEP 4: CREATE DRAFT DOCUMENT 
       final draftData = {
         'id': usernameDocId,
         'status': 'draft',
@@ -249,7 +255,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
           .set(draftData);
       _logger.i('✅ Draft document created successfully for: $usernameDocId');
 
-      // ✅ STEP 5: CREATE USER DOCUMENT IN USERS COLLECTION
+      // STEP 5: CREATE USER DOCUMENT IN USERS COLLECTION
       _logger.i('Creating Users collection document for: $usernameDocId');
       
       final appUser = AppUser(
@@ -268,8 +274,9 @@ class RegistrationScreenState extends State<RegistrationScreen>
       _logger.i('✅ Users document created successfully for: $usernameDocId');
       _logger.d('User role set to: ${UserRoles.employee}');
 
+      // STEP 6: SHOW SUCCESS MESSAGE AND NAVIGATE
       if (mounted) {
-        _logger.i('Showing success message and navigating based on role');
+        _logger.i('Showing success message and navigating to Employee Dashboard');
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -280,7 +287,6 @@ class RegistrationScreenState extends State<RegistrationScreen>
           ),
         );
 
-        // ✅ STEP 6: REDIRECT BASED ON ROLE
         // New users always get Employee role, so redirect to Employee Dashboard
         _logger.i('Redirecting new Employee to Employee Dashboard');
         Navigator.of(context).pushReplacement(
@@ -290,6 +296,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
         );
         _logger.i('Navigation to EmployeeDashboard completed');
       }
+
     } on FirebaseAuthException catch (e, stackTrace) {
       _logger.e(
         'FirebaseAuthException during registration',
@@ -322,6 +329,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
             _logger.e('Unknown FirebaseAuthException: ${e.code}');
         }
       });
+
     } on FirebaseException catch (e, stackTrace) {
       _logger.e(
         'FirebaseException during Firestore operation',
@@ -330,9 +338,20 @@ class RegistrationScreenState extends State<RegistrationScreen>
       );
       _logger.e('Error code: ${e.code}, Message: ${e.message}');
 
+      // If we created an auth user but failed to create Firestore docs, clean up
+      if (user != null) {
+        try {
+          await user.delete();
+          _logger.i('Cleaned up Firebase Auth user after Firestore error');
+        } catch (deleteError) {
+          _logger.e('Failed to delete auth user during cleanup: $deleteError');
+        }
+      }
+
       setState(() {
         _errorMessage = 'Failed to save user data. Please try again.';
       });
+
     } catch (e, stackTrace) {
       _logger.e(
         'Unexpected error during registration',
@@ -340,15 +359,26 @@ class RegistrationScreenState extends State<RegistrationScreen>
         stackTrace: stackTrace,
       );
 
+      // If we created an auth user but encountered an error, clean up
+      if (user != null) {
+        try {
+          await user.delete();
+          _logger.i('Cleaned up Firebase Auth user after unexpected error');
+        } catch (deleteError) {
+          _logger.e('Failed to delete auth user during cleanup: $deleteError');
+        }
+      }
+
       setState(() {
         if (e.toString().contains('Username already taken')) {
-          _errorMessage = 'This username is already taken.';
+          _errorMessage = 'This username is already taken. Please choose another.';
           _logger.w('Username taken: ${_usernameController.text.trim()}');
         } else {
           _errorMessage = 'An unexpected error occurred. Please try again.';
           _logger.e('Unknown error type: ${e.runtimeType}');
         }
       });
+
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -458,7 +488,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
                               controller: _usernameController,
                               style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
-                                labelText: 'Username',
+                                labelText: 'Full Name',
                                 labelStyle: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.9),
                                 ),

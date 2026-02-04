@@ -242,10 +242,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       elevation: 0,
       backgroundColor: const Color.fromARGB(255, 84, 4, 108),
       toolbarHeight: 70,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
+      // ✅ REMOVED: Back button since this is the first screen after registration
+      // Users should not be able to navigate back from here
+      automaticallyImplyLeading: false, // This prevents the default back button
       title: Row(
         children: [
           Container(
@@ -310,7 +309,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
           },
           tooltip: 'Notifications',
         ),
-        // ✅ UPDATED: Settings button now navigates to SettingsScreen
         IconButton(
           icon: const Icon(Icons.settings_outlined, color: Colors.white),
           onPressed: () {
