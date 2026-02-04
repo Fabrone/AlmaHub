@@ -2,6 +2,7 @@ import 'package:almahub/models/employee_onboarding_models.dart';
 import 'package:almahub/models/user_model.dart';
 import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
+import 'package:almahub/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +26,7 @@ class EmployeeDashboard extends StatefulWidget {
 class _EmployeeDashboardState extends State<EmployeeDashboard>
     with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final Logger _logger = Logger(
     printer: PrettyPrinter(
       methodCount: 2,
@@ -40,7 +42,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   
-  // ✅ NEW: Role monitoring
+  // Role monitoring
   StreamSubscription<DocumentSnapshot>? _roleListener;
   String? _currentUserRole;
   bool _isCheckingRole = true;
@@ -68,21 +70,21 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
 
     _animationController.forward();
     
-    // ✅ NEW: Setup role listener
+    // Setup role listener
     _setupRoleListener();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _roleListener?.cancel(); // ✅ NEW: Cancel listener
+    _roleListener?.cancel();
     _logger.i('EmployeeDashboard disposed');
     super.dispose();
   }
 
-  // ✅ NEW: Setup realtime role monitoring
+  // Setup realtime role monitoring
   void _setupRoleListener() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = _auth.currentUser;
     
     if (currentUser == null) {
       _logger.e('No authenticated user found');
@@ -155,7 +157,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     }
   }
 
-  // ✅ NEW: Handle role changes
+  // Handle role changes
   void _handleRoleChange(String? newRole) {
     if (newRole == null) return;
 
@@ -192,12 +194,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     }
     
     // For other role changes (HR, Supervisor), just refresh the UI
-    // The dashboard can show different features based on role
     else {
       _logger.d('Role changed to $newRole, refreshing UI');
-      setState(() {
-        // Trigger rebuild to show role-specific features
-      });
+      setState(() {});
     }
   }
 
@@ -205,7 +204,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   Widget build(BuildContext context) {
     _logger.d('Building EmployeeDashboard widget');
     
-    // ✅ NEW: Show loading while checking role
+    // Show loading while checking role
     if (_isCheckingRole) {
       return Scaffold(
         backgroundColor: const Color.fromARGB(255, 245, 245, 250),
@@ -274,7 +273,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
                   color: Colors.white,
                 ),
               ),
-              // ✅ NEW: Show current role
               Text(
                 _currentUserRole != null 
                     ? 'Role: $_currentUserRole' 
@@ -290,7 +288,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         ],
       ),
       actions: [
-        // ✅ NEW: Show Admin icon if user is Admin
+        // Show Admin icon if user is Admin
         if (_currentUserRole == UserRoles.admin)
           IconButton(
             icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
@@ -312,10 +310,17 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
           },
           tooltip: 'Notifications',
         ),
+        // ✅ UPDATED: Settings button now navigates to SettingsScreen
         IconButton(
           icon: const Icon(Icons.settings_outlined, color: Colors.white),
           onPressed: () {
             _logger.i('Settings button clicked');
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SettingsScreen(),
+              ),
+            );
           },
           tooltip: 'Settings',
         ),
@@ -327,7 +332,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   Widget _buildApplicationsList() {
     _logger.d('Building applications list stream');
 
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = _auth.currentUser;
 
     if (currentUser == null) {
       _logger.e('No authenticated user found');
@@ -438,10 +443,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
               );
             }
 
-            // User has at least one application - don't show create button
+            // User has at least one application
             return Column(
               children: [
-                // ✅ NEW: Show role badge if not Employee
+                // Show role badge if not Employee
                 if (_currentUserRole != null && _currentUserRole != UserRoles.employee)
                   _buildRoleBadge(_currentUserRole!),
                 
@@ -459,7 +464,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
                           horizontal: screenWidth * 0.04,
                           vertical: 16,
                         ),
-                        itemCount: allApplications.length,
+                        itemCount: allApplications.length, // ✅ REMOVED: +1 for logout button
                         itemBuilder: (context, index) {
                           final doc = allApplications[index];
                           final data = doc.data() as Map<String, dynamic>;
@@ -487,7 +492,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     );
   }
 
-  // ✅ NEW: Role badge widget
+  // Role badge widget
   Widget _buildRoleBadge(String role) {
     Color badgeColor;
     IconData badgeIcon;
@@ -895,7 +900,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     final statutoryDocs = data['statutoryDocs'] as Map<String, dynamic>? ?? {};
     final payrollDetails = data['payrollDetails'] as Map<String, dynamic>? ?? {};
 
-    int totalFields = 15; // Approximate total required fields
+    int totalFields = 15;
     int filledFields = 0;
 
     // Count filled personal info fields
