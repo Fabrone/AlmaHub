@@ -52,6 +52,7 @@ dependencies:
   web: ^1.1.1
   firebase_auth: ^6.1.4
   package_info_plus: ^9.0.0
+  async: ^2.13.0
 
 dev_dependencies:
   flutter_test:
