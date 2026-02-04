@@ -3,6 +3,9 @@ import 'package:almahub/models/user_model.dart';
 import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/settings_screen.dart';
+import 'package:almahub/screens/hr/hr_dashboard.dart';
+// import 'package:almahub/screens/accountant/accountant_dashboard.dart';
+// import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -193,7 +196,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       });
     }
     
-    // For other role changes (HR, Supervisor), just refresh the UI
+    // For other role changes (HR, Supervisor, Accountant), just refresh the UI
     else {
       _logger.d('Role changed to $newRole, refreshing UI');
       setState(() {});
@@ -287,21 +290,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         ],
       ),
       actions: [
-        // Show Admin icon if user is Admin
-        if (_currentUserRole == UserRoles.admin)
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
-            onPressed: () {
-              _logger.i('Admin navigating to RoleSelectionScreen');
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const RoleSelectionScreen(),
-                ),
-              );
-            },
-            tooltip: 'Admin Panel',
-          ),
+        // Role-specific panel access buttons
+        _buildRolePanelButton(),
+        
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.white),
           onPressed: () {
@@ -324,6 +315,108 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         ),
         const SizedBox(width: 8),
       ],
+    );
+  }
+
+  /// Build role-specific panel access button based on current user role
+  Widget _buildRolePanelButton() {
+    if (_currentUserRole == null || _currentUserRole == UserRoles.employee) {
+      // No panel button for Employee role
+      return const SizedBox.shrink();
+    }
+
+    IconData icon;
+    Color iconColor;
+    String tooltip;
+    VoidCallback onPressed;
+
+    switch (_currentUserRole) {
+      case UserRoles.admin:
+        icon = Icons.admin_panel_settings;
+        iconColor = Colors.amber;
+        tooltip = 'Admin Panel';
+        onPressed = () {
+          _logger.i('Admin navigating to RoleSelectionScreen');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const RoleSelectionScreen(),
+            ),
+          );
+        };
+        break;
+
+      case UserRoles.hr:
+        icon = Icons.business_center;
+        iconColor = Colors.blue;
+        tooltip = 'HR Dashboard';
+        onPressed = () {
+          _logger.i('HR navigating to HRDashboard');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const HRDashboard(),
+            ),
+          );
+        };
+        break;
+
+      case UserRoles.accountant:
+        icon = Icons.account_balance_wallet;
+        iconColor = Colors.orange;
+        tooltip = 'Accountant Dashboard';
+        onPressed = () {
+          _logger.i('Accountant attempting to navigate to AccountantDashboard');
+          // Navigator.push(
+          //   context,
+          //   MaterialPageRoute(
+          //     builder: (context) => const AccountantDashboard(),
+          //   ),
+          // );
+          
+          // Temporary message until dashboard is implemented
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Accountant Dashboard coming soon!'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        };
+        break;
+
+      case UserRoles.supervisor:
+        icon = Icons.supervisor_account;
+        iconColor = Colors.green;
+        tooltip = 'Supervisor Dashboard';
+        onPressed = () {
+          _logger.i('Supervisor attempting to navigate to SupervisorDashboard');
+          // Navigator.push(
+          //   context,
+          //   MaterialPageRoute(
+          //     builder: (context) => const SupervisorDashboard(),
+          //   ),
+          // );
+          
+          // Temporary message until dashboard is implemented
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Supervisor Dashboard coming soon!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        };
+        break;
+
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return IconButton(
+      icon: Icon(icon, color: iconColor),
+      onPressed: onPressed,
+      tooltip: tooltip,
     );
   }
 
