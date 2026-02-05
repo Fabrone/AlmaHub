@@ -5,6 +5,7 @@ import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/settings_screen.dart';
 import 'package:almahub/screens/hr/hr_dashboard.dart';
+import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
 // import 'package:almahub/screens/accountant/accountant_dashboard.dart';
 // import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
 import 'package:flutter/material.dart';
@@ -406,19 +407,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         tooltip = 'Supervisor Dashboard';
         onPressed = () {
           _logger.i('Supervisor attempting to navigate to SupervisorDashboard');
-          // Navigator.push(
-          //   context,
-          //   MaterialPageRoute(
-          //     builder: (context) => const SupervisorDashboard(),
-          //   ),
-          // );
-          
-          // Temporary message until dashboard is implemented
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Supervisor Dashboard coming soon!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
+          Navigator.push(
+           context,
+           MaterialPageRoute(
+           builder: (context) => const SupervisorDashboard(),
             ),
           );
         };
