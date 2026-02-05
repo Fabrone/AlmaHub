@@ -1,5 +1,6 @@
 import 'package:almahub/models/employee_onboarding_models.dart';
 import 'package:almahub/models/user_model.dart';
+import 'package:almahub/screens/employee/employee_hours_view.dart';
 import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/settings_screen.dart';
@@ -245,8 +246,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       elevation: 0,
       backgroundColor: const Color.fromARGB(255, 84, 4, 108),
       toolbarHeight: 70,
-      // ✅ REMOVED: Back button since this is the first screen after registration
-      // Users should not be able to navigate back from here
       automaticallyImplyLeading: false, // This prevents the default back button
       title: Row(
         children: [
@@ -292,6 +291,22 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       actions: [
         // Role-specific panel access buttons
         _buildRolePanelButton(),
+        
+        // View My Hours button (hidden for Admins)
+        if (_currentUserRole != null && _currentUserRole != UserRoles.admin)
+          IconButton(
+            icon: const Icon(Icons.access_time, color: Colors.white),
+            onPressed: () {
+              _logger.i('Opening My Hours view');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EmployeeHoursView(),
+                ),
+              );
+            },
+            tooltip: 'My Work Hours',
+          ),
         
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.white),

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
+import 'hours_entry_dialog.dart';
 
 /// Supervisor Dashboard
 /// Allows supervisors to:
@@ -120,7 +121,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     if (_isLoadingSupervisorInfo) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(
+            color: Color.fromARGB(255, 123, 31, 162),
+          ),
         ),
       );
     }
@@ -130,14 +133,22 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     }
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 232, 245, 233),
+      backgroundColor: const Color.fromARGB(255, 240, 235, 245), // Purple-tinted background
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          _buildDepartmentHeader(),
-          _buildMonthSelector(),
-          _buildStatsCards(),
-          Expanded(child: _buildEmployeeTable()),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildDepartmentHeader(),
+                  _buildMonthSelector(),
+                  _buildStatsCards(),
+                  _buildEmployeeTable(),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
       floatingActionButton: _selectedEmployees.isNotEmpty
@@ -148,7 +159,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color.fromARGB(255, 46, 125, 50),
+      backgroundColor: const Color.fromARGB(255, 123, 31, 162), // Purple theme
       elevation: 2,
       title: const Text(
         'Supervisor Dashboard',
@@ -184,8 +195,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color.fromARGB(255, 46, 125, 50),
-            Color.fromARGB(255, 67, 160, 71),
+            Color.fromARGB(255, 123, 31, 162), // Purple
+            Color.fromARGB(255, 156, 39, 176), // Lighter purple
           ],
         ),
         borderRadius: BorderRadius.circular(12),
@@ -290,7 +301,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         children: [
           const Icon(
             Icons.calendar_month,
-            color: Color.fromARGB(255, 46, 125, 50),
+            color: Color.fromARGB(255, 123, 31, 162),
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -307,7 +318,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.1),
+                color: const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -318,26 +329,25 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 46, 125, 50),
+                      color: Color.fromARGB(255, 123, 31, 162),
                     ),
                   ),
                   PopupMenuButton<DateTime>(
                     icon: const Icon(
                       Icons.arrow_drop_down,
-                      color: Color.fromARGB(255, 46, 125, 50),
+                      color: Color.fromARGB(255, 123, 31, 162),
                     ),
                     onSelected: (DateTime newMonth) {
                       _logger.i('Month changed to: ${DateFormat('MMMM yyyy').format(newMonth)}');
                       setState(() {
                         _selectedMonth = newMonth;
-                        _selectedEmployees.clear(); // Clear selections when month changes
+                        _selectedEmployees.clear();
                       });
                     },
                     itemBuilder: (context) {
                       final List<DateTime> months = [];
                       final now = DateTime.now();
                       
-                      // Generate last 12 months
                       for (int i = 0; i < 12; i++) {
                         months.add(DateTime(now.year, now.month - i, 1));
                       }
@@ -395,102 +405,130 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
         final avgHours = totalEmployees > 0 ? totalHours / totalEmployees : 0;
 
-        return Container(
-          margin: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  'Team Members',
-                  totalEmployees.toString(),
-                  const Color.fromARGB(255, 46, 125, 50),
-                  Icons.people,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = constraints.maxWidth;
+            final cardWidth = screenWidth * 0.235; // Match accountant dashboard sizing
+            final spacing = screenWidth * 0.015;
+            
+            return Container(
+              margin: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.02,
+                vertical: 12,
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildStatCard(
+                      'Team Members',
+                      totalEmployees.toString(),
+                      const Color.fromARGB(255, 123, 31, 162),
+                      Icons.people,
+                      cardWidth,
+                    ),
+                    SizedBox(width: spacing),
+                    _buildStatCard(
+                      'Total Hours',
+                      NumberFormat('#,##0.0').format(totalHours),
+                      const Color.fromARGB(255, 2, 136, 209),
+                      Icons.access_time,
+                      cardWidth,
+                    ),
+                    SizedBox(width: spacing),
+                    _buildStatCard(
+                      'Avg Hours/Employee',
+                      NumberFormat('#,##0.0').format(avgHours),
+                      const Color.fromARGB(255, 46, 125, 50),
+                      Icons.timeline,
+                      cardWidth,
+                    ),
+                    SizedBox(width: spacing),
+                    _buildStatCard(
+                      'Employees Logged',
+                      employeesWithHours.toString(),
+                      const Color.fromARGB(255, 255, 152, 0),
+                      Icons.check_circle,
+                      cardWidth,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  'Total Hours',
-                  NumberFormat('#,##0.0').format(totalHours),
-                  const Color.fromARGB(255, 2, 136, 209),
-                  Icons.access_time,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  'Avg Hours/Employee',
-                  NumberFormat('#,##0.0').format(avgHours),
-                  const Color.fromARGB(255, 123, 31, 162),
-                  Icons.timeline,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  'Employees Logged',
-                  employeesWithHours.toString(),
-                  const Color.fromARGB(255, 255, 152, 0),
-                  Icons.check_circle,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+  Widget _buildStatCard(String title, String value, Color color, IconData icon, double cardWidth) {
+    final iconSize = (cardWidth * 0.08).clamp(16.0, 22.0);
+    final valueSize = (cardWidth * 0.055).clamp(12.0, 16.0);
+    final titleSize = (cardWidth * 0.045).clamp(10.0, 12.0);
+    final horizontalPadding = cardWidth * 0.05;
+    final verticalPadding = 8.0;
+    
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: cardWidth,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 20,
-                ),
-              ),
-              const Spacer(),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          Container(
+            padding: EdgeInsets.all(cardWidth * 0.04),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              icon,
               color: color,
+              size: iconSize,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
+          SizedBox(width: cardWidth * 0.05),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: valueSize,
+                    fontWeight: FontWeight.bold,
+                    color: const Color.fromARGB(255, 123, 31, 162),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: titleSize,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
             ),
           ),
         ],
@@ -499,94 +537,108 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   Widget _buildEmployeeTable() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        
+        return Container(
+          margin: EdgeInsets.symmetric(
+            horizontal: screenWidth * 0.02,
+            vertical: 12,
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _buildTableHeader(),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _getEmployeesStream(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  _logger.e('Error in employee stream', error: snapshot.error);
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildTableHeader(screenWidth),
+              StreamBuilder<QuerySnapshot>(
+                stream: _getEmployeesStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    _logger.e('Error in employee stream', error: snapshot.error);
+                    return Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text('Error: ${snapshot.error}'),
+                    );
+                  }
 
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(
+                        color: Color.fromARGB(255, 123, 31, 162),
+                      ),
+                    );
+                  }
 
-                final allEmployees = snapshot.data!.docs;
-                _logger.i('Loaded ${allEmployees.length} employees in department: $_supervisorDepartment');
+                  final allEmployees = snapshot.data!.docs;
+                  _logger.i('Loaded ${allEmployees.length} employees in department: $_supervisorDepartment');
 
-                // Apply search filter
-                final employees = _searchQuery.isEmpty
-                    ? allEmployees
-                    : allEmployees.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final fullName = (data['personalInfo']?['fullName'] ?? '').toString().toLowerCase();
-                        final email = (data['personalInfo']?['email'] ?? '').toString().toLowerCase();
-                        final jobTitle = (data['employmentInfo']?['jobTitle'] ?? '').toString().toLowerCase();
-                        
-                        return fullName.contains(_searchQuery) ||
-                               email.contains(_searchQuery) ||
-                               jobTitle.contains(_searchQuery);
-                      }).toList();
+                  // Apply search filter
+                  final employees = _searchQuery.isEmpty
+                      ? allEmployees
+                      : allEmployees.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final fullName = (data['personalInfo']?['fullName'] ?? '').toString().toLowerCase();
+                          final email = (data['personalInfo']?['email'] ?? '').toString().toLowerCase();
+                          final jobTitle = (data['employmentInfo']?['jobTitle'] ?? '').toString().toLowerCase();
+                          
+                          return fullName.contains(_searchQuery) ||
+                                 email.contains(_searchQuery) ||
+                                 jobTitle.contains(_searchQuery);
+                        }).toList();
 
-                if (employees.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _searchQuery.isNotEmpty
-                              ? Icons.search_off
-                              : Icons.people_outline,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _searchQuery.isNotEmpty
-                              ? 'No results found for "$_searchQuery"'
-                              : 'No employees in your department',
-                          style: const TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                        if (_searchQuery.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          TextButton.icon(
-                            onPressed: () {
-                              setState(() => _searchQuery = '');
-                            },
-                            icon: const Icon(Icons.clear),
-                            label: const Text('Clear Search'),
+                  if (employees.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _searchQuery.isNotEmpty
+                                ? Icons.search_off
+                                : Icons.people_outline,
+                            size: 64,
+                            color: Colors.grey.shade400,
                           ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _searchQuery.isNotEmpty
+                                ? 'No results found for "$_searchQuery"'
+                                : 'No employees in your department',
+                            style: const TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                          if (_searchQuery.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() => _searchQuery = '');
+                              },
+                              icon: const Icon(Icons.clear),
+                              label: const Text('Clear Search'),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  );
-                }
+                      ),
+                    );
+                  }
 
-                return SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: SingleChildScrollView(
+                  return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowHeight: 50,
-                      dataRowMinHeight: 55,
-                      dataRowMaxHeight: 55,
+                      dataRowMinHeight: 45,
+                      dataRowMaxHeight: 45,
                       showCheckboxColumn: true,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
@@ -595,7 +647,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                       headingTextStyle: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
-                        color: Color.fromARGB(255, 46, 125, 50),
+                        color: Color.fromARGB(255, 123, 31, 162),
                       ),
                       dataTextStyle: const TextStyle(
                         fontSize: 13,
@@ -645,7 +697,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                             DataCell(Text('${index + 1}')),
                             DataCell(
                               SizedBox(
-                                width: 180,
+                                width: 150,
                                 child: Text(
                                   fullName,
                                   overflow: TextOverflow.ellipsis,
@@ -655,7 +707,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                             ),
                             DataCell(
                               SizedBox(
-                                width: 200,
+                                width: 180,
                                 child: Text(
                                   email,
                                   overflow: TextOverflow.ellipsis,
@@ -664,7 +716,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                             ),
                             DataCell(
                               SizedBox(
-                                width: 150,
+                                width: 140,
                                 child: Text(
                                   jobTitle,
                                   overflow: TextOverflow.ellipsis,
@@ -681,7 +733,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: hoursWorked > 0
-                                      ? const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.1)
+                                      ? const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1)
                                       : Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
@@ -693,7 +745,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
                                     color: hoursWorked > 0
-                                        ? const Color.fromARGB(255, 46, 125, 50)
+                                        ? const Color.fromARGB(255, 123, 31, 162)
                                         : Colors.grey.shade600,
                                   ),
                                 ),
@@ -701,38 +753,62 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                             ),
                             DataCell(_buildStatusBadge(status)),
                             DataCell(
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.visibility,
-                                  size: 20,
-                                  color: Color.fromARGB(255, 46, 125, 50),
-                                ),
-                                onPressed: () {
-                                  _logger.i('View details for: ${doc.id}');
-                                  _viewEmployeeDetails(doc.id, data);
-                                },
-                                tooltip: 'View Details',
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.add_circle,
+                                      size: 20,
+                                      color: Color.fromARGB(255, 123, 31, 162),
+                                    ),
+                                    onPressed: () {
+                                      _logger.i('Log hours for: ${doc.id}');
+                                      _showHoursEntryDialog(doc.id, fullName, department);
+                                    },
+                                    tooltip: 'Log Hours',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.visibility,
+                                      size: 20,
+                                      color: Color.fromARGB(255, 123, 31, 162),
+                                    ),
+                                    onPressed: () {
+                                      _logger.i('View details for: ${doc.id}');
+                                      _viewEmployeeDetails(doc.id, data);
+                                    },
+                                    tooltip: 'View Details',
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         );
                       }).toList(),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildTableHeader() {
+  Widget _buildTableHeader(double screenWidth) {
+    final logoSize = (screenWidth * 0.025).clamp(35.0, 50.0);
+    final titleSize = (screenWidth * 0.014).clamp(16.0, 22.0);
+    final subtitleSize = (screenWidth * 0.010).clamp(12.0, 15.0);
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.symmetric(
+        horizontal: screenWidth * 0.025,
+        vertical: 16,
+      ),
       decoration: const BoxDecoration(
-        color: Color.fromARGB(255, 46, 125, 50),
+        color: Color.fromARGB(255, 123, 31, 162),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(12),
           topRight: Radius.circular(12),
@@ -741,35 +817,38 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            width: logoSize,
+            height: logoSize,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.people,
-              size: 28,
-              color: Color.fromARGB(255, 46, 125, 50),
+            child: Center(
+              child: Icon(
+                Icons.people,
+                size: logoSize * 0.6,
+                color: const Color.fromARGB(255, 123, 31, 162),
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: screenWidth * 0.015),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Department Employees',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: titleSize,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   'Manage hours and employee information for ${_supervisorDepartment ?? "your department"}',
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: TextStyle(
+                    fontSize: subtitleSize,
                     color: Colors.white70,
                   ),
                 ),
@@ -892,7 +971,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       onPressed: _isForwarding ? null : _forwardHoursToAccountant,
       backgroundColor: _isForwarding
           ? Colors.grey.shade400
-          : const Color.fromARGB(255, 46, 125, 50),
+          : const Color.fromARGB(255, 123, 31, 162),
       foregroundColor: Colors.white,
       icon: _isForwarding
           ? const SizedBox(
@@ -913,18 +992,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     );
   }
 
-  /// Get stream of employees in supervisor's department
   Stream<QuerySnapshot> _getEmployeesStream() {
     _logger.d('Getting employees stream for department: $_supervisorDepartment');
     
-    // Query both EmployeeDetails and Draft collections for employees in this department
     return _firestore
         .collection('EmployeeDetails')
         .where('employmentInfo.department', isEqualTo: _supervisorDepartment)
         .snapshots();
   }
 
-  /// Get monthly hours worked for an employee
   double _getMonthlyHours(Map<String, dynamic> employeeData) {
     final monthKey = DateFormat('yyyy-MM').format(_selectedMonth);
     final hoursData = employeeData['hoursWorked'] as Map<String, dynamic>?;
@@ -967,7 +1043,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 46, 125, 50),
+              backgroundColor: const Color.fromARGB(255, 123, 31, 162),
             ),
             child: const Text('Search'),
           ),
@@ -1039,7 +1115,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
-            color: Color.fromARGB(255, 46, 125, 50),
+            color: Color.fromARGB(255, 123, 31, 162),
           ),
         ),
         const SizedBox(height: 12),
@@ -1088,7 +1164,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     setState(() => _isForwarding = true);
 
     try {
-      // Get employee data for selected employees
       final employeeData = <Map<String, dynamic>>[];
       
       for (final employeeId in _selectedEmployees) {
@@ -1114,7 +1189,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         }
       }
 
-      // Create forwarding record in Firestore
       await _firestore.collection('HoursForwarded').add({
         'supervisorId': _currentUser!.uid,
         'supervisorName': _supervisorName,
@@ -1124,11 +1198,11 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         'monthDisplay': DateFormat('MMMM yyyy').format(_selectedMonth),
         'employees': employeeData,
         'forwardedAt': FieldValue.serverTimestamp(),
-        'status': 'pending', // pending, approved, processed
+        'status': 'pending',
         'totalEmployees': employeeData.length,
         'totalHours': employeeData.fold<double>(
           0,
-          (sum, emp) => sum + (emp['hoursWorked'] as double),
+          (total, emp) => total + (emp['hoursWorked'] as double),
         ),
       });
 
@@ -1136,13 +1210,11 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
       if (!mounted) return;
 
-      // Clear selections
       setState(() {
         _selectedEmployees.clear();
         _isForwarding = false;
       });
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1170,6 +1242,24 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     }
   }
 
+  void _showHoursEntryDialog(String employeeId, String employeeName, String department) {
+    _logger.i('Opening hours entry dialog for: $employeeName');
+    
+    showDialog(
+      context: context,
+      builder: (context) => HoursEntryDialog(
+        employeeId: employeeId,
+        employeeName: employeeName,
+        department: department,
+      ),
+    ).then((saved) {
+      if (saved == true) {
+        _logger.i('Hours saved, refreshing dashboard');
+        setState(() {});
+      }
+    });
+  }
+
   Widget _buildErrorScreen(String message) {
     return Scaffold(
       body: Container(
@@ -1178,8 +1268,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color.fromARGB(255, 46, 125, 50),
-              Color.fromARGB(255, 102, 187, 106),
+              Color.fromARGB(255, 123, 31, 162),
+              Color.fromARGB(255, 156, 39, 176),
             ],
           ),
         ),
@@ -1226,7 +1316,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                     label: const Text('Go Back'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: const Color.fromARGB(255, 46, 125, 50),
+                      foregroundColor: const Color.fromARGB(255, 123, 31, 162),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 32,
                         vertical: 16,

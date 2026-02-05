@@ -414,9 +414,18 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
                                    bankName.contains(_searchQuery);
                           }).toList();
 
+                    // Sort employees by department alphabetically
+                    employees.sort((a, b) {
+                      final deptA = ((a.data() as Map<String, dynamic>)['employmentInfo']?['department'] ?? '').toString().toLowerCase();
+                      final deptB = ((b.data() as Map<String, dynamic>)['employmentInfo']?['department'] ?? '').toString().toLowerCase();
+                      return deptA.compareTo(deptB);
+                    });
+
                     if (_searchQuery.isNotEmpty) {
                       _logger.d('Search active: "$_searchQuery" - Found ${employees.length} matches');
                     }
+
+                    _logger.d('Employees sorted by department alphabetically');
 
                     if (employees.isEmpty) {
                       _logger.w('No employees found ${_searchQuery.isNotEmpty ? "matching search" : "in collection"}');
@@ -479,6 +488,8 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
                             DataColumn(label: Text('No.')),
                             DataColumn(label: Text('Full Name')),
                             DataColumn(label: Text('Email')),
+                            DataColumn(label: Text('Department')), // Added
+                            DataColumn(label: Text('Hours')), // Added
                             DataColumn(label: Text('Basic Salary')),
                             DataColumn(label: Text('Housing')),
                             DataColumn(label: Text('Transport')),
@@ -500,7 +511,19 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
                             final index = entry.key;
                             final doc = entry.value;
                             final data = doc.data() as Map<String, dynamic>;
+                            final personalInfo = data['personalInfo'] as Map<String, dynamic>? ?? {};
+                            final employmentInfo = data['employmentInfo'] as Map<String, dynamic>? ?? {};
                             final payrollData = data['payrollDetails'] as Map<String, dynamic>? ?? {};
+                            final hoursWorked = data['hoursWorked'] as Map<String, dynamic>? ?? {};
+                            
+                            // Extract employee information
+                            final fullName = personalInfo['fullName'] ?? '-';
+                            final email = personalInfo['email'] ?? '-';
+                            final department = employmentInfo['department'] ?? '-';
+                            
+                            // Get current month's hours
+                            final currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
+                            final monthlyHours = (hoursWorked[currentMonth] ?? 0).toDouble();
                             
                             // Extract payroll information
                             final basicSalary = (payrollData['basicSalary'] ?? 0).toDouble();
@@ -522,7 +545,7 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
                             
                             final netPay = basicSalary + totalAllowances - totalDeductions;
                             
-                            _logger.d('Row ${index + 1}: ${data['personalInfo']?['fullName'] ?? 'Unknown'} - Net Pay: $netPay');
+                            _logger.d('Row ${index + 1}: $fullName - Dept: $department, Hours: $monthlyHours, Net Pay: $netPay');
                             
                             return DataRow(
                               cells: [
@@ -531,7 +554,7 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
                                   SizedBox(
                                     width: 150,
                                     child: Text(
-                                      data['personalInfo']?['fullName'] ?? '-',
+                                      fullName,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -540,8 +563,66 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
                                   SizedBox(
                                     width: 180,
                                     child: Text(
-                                      data['personalInfo']?['email'] ?? '-',
+                                      email,
                                       overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                // Department cell
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: _getDepartmentColor(department).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: _getDepartmentColor(department).withValues(alpha: 0.3),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      department,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                        color: _getDepartmentColor(department),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Hours cell
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: monthlyHours > 0
+                                          ? const Color.fromARGB(255, 2, 136, 209).withValues(alpha: 0.1)
+                                          : Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.access_time,
+                                          size: 14,
+                                          color: monthlyHours > 0
+                                              ? const Color.fromARGB(255, 2, 136, 209)
+                                              : Colors.grey.shade600,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          monthlyHours > 0
+                                              ? '${NumberFormat('#,##0.0').format(monthlyHours)} hrs'
+                                              : 'Not logged',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: monthlyHours > 0
+                                                ? const Color.fromARGB(255, 2, 136, 209)
+                                                : Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -1045,6 +1126,28 @@ class _AccountantDashboardState extends State<AccountantDashboard> {
           _downloadProgress = null;
         });
       }
+    }
+  }
+
+  /// Get color for department badge
+  Color _getDepartmentColor(String department) {
+    final normalizedDept = department.toLowerCase();
+    
+    // Assign colors based on department names
+    if (normalizedDept.contains('account') || normalizedDept.contains('finance')) {
+      return const Color.fromARGB(255, 255, 152, 0); // Orange
+    } else if (normalizedDept.contains('hr') || normalizedDept.contains('human')) {
+      return const Color.fromARGB(255, 2, 136, 209); // Blue
+    } else if (normalizedDept.contains('engineering') || normalizedDept.contains('tech')) {
+      return const Color.fromARGB(255, 46, 125, 50); // Green
+    } else if (normalizedDept.contains('marketing') || normalizedDept.contains('sales')) {
+      return const Color.fromARGB(255, 211, 47, 47); // Red
+    } else if (normalizedDept.contains('operations') || normalizedDept.contains('ops')) {
+      return const Color.fromARGB(255, 123, 31, 162); // Purple
+    } else if (normalizedDept.contains('it') || normalizedDept.contains('information')) {
+      return const Color.fromARGB(255, 3, 169, 244); // Light Blue
+    } else {
+      return Colors.grey; // Default
     }
   }
 
