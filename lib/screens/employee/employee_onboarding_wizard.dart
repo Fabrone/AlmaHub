@@ -64,6 +64,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
   // Store registered username and email
   String? _registeredUsername;
   String? _registeredEmail;
+  String? _previousDepartment; // Track previous department for updates
+  List<String> _availableDepartments = []; // List of departments from Firestore
+  bool _isLoadingDepartments = true;
 
   @override
   void initState() {
@@ -72,6 +75,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     _logger.d('Existing employee data: ${widget.existingEmployee != null ? "YES" : "NO"}');
     _initializeData();
     _loadUserDataFromAuth();  
+    _loadDepartments(); // ✅ NEW: Add this line
   }
 
   void _initializeData() {
@@ -90,6 +94,44 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     _benefitsInsurance = BenefitsInsurance();
     _workTools = WorkToolsAccess();
     _logger.d('Default data models initialized successfully');
+  }
+
+  Future<void> _loadDepartments() async {
+    _logger.i('_loadDepartments: Loading departments from Firestore');
+    
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('Departments')
+          .get();
+      
+      _logger.i('_loadDepartments: Found ${snapshot.docs.length} departments');
+      
+      setState(() {
+        _availableDepartments = snapshot.docs
+            .map((doc) => doc.id)
+            .toList()
+          ..sort(); // Sort alphabetically
+        _isLoadingDepartments = false;
+      });
+      
+      _logger.i('_loadDepartments: Available departments: $_availableDepartments');
+    } catch (e, stackTrace) {
+      _logger.e('_loadDepartments: Error loading departments', error: e, stackTrace: stackTrace);
+      
+      setState(() {
+        _isLoadingDepartments = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading departments: $e'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadUserDataFromAuth() async {
@@ -135,7 +177,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
         if (widget.existingEmployee == null) {
           _logger.i('Loading draft data from Firestore');
           final employee = EmployeeOnboarding.fromMap(draftData);
-          
+                    
           setState(() {
             _personalInfo = employee.personalInfo;
             _employmentDetails = employee.employmentDetails;
@@ -145,6 +187,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             _contractsForms = employee.contractsForms;
             _benefitsInsurance = employee.benefitsInsurance;
             _workTools = employee.workTools;
+            
+            _previousDepartment = _employmentDetails.department;
+            _logger.i('Previous department loaded: $_previousDepartment');
           });
           
           _logger.i('Draft data loaded successfully');
@@ -187,7 +232,7 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
       _logger.d('  - Full Name: ${employee.personalInfo.fullName}');
       _logger.d('  - Created: ${employee.createdAt}');
       _logger.d('  - Updated: ${employee.updatedAt}');
-      
+            
       setState(() {
         _draftId = employee.id;
         _personalInfo = employee.personalInfo;
@@ -198,6 +243,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
         _contractsForms = employee.contractsForms;
         _benefitsInsurance = employee.benefitsInsurance;
         _workTools = employee.workTools;
+        
+        _previousDepartment = _employmentDetails.department;
+        _logger.i('Previous department from existing data: $_previousDepartment');
       });
       
       _logger.i('Existing employee data loaded successfully (Draft ID: $_draftId)');
@@ -228,6 +276,111 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     
     _logger.d('File size validation passed');
     return true;
+  }
+
+// ✅ NEW: Add employee to department members
+Future<void> _addToDepartmentMembers(String department) async {
+  _logger.i('_addToDepartmentMembers: Adding employee to department: $department');
+  
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logger.w('_addToDepartmentMembers: No authenticated user found');
+      return;
+    }
+
+    final departmentRef = FirebaseFirestore.instance
+        .collection('Departments')
+        .doc(department);
+
+    final departmentDoc = await departmentRef.get();
+    
+    if (!departmentDoc.exists) {
+      _logger.i('_addToDepartmentMembers: Department does not exist, creating new department');
+      
+      // Create new department document
+      await departmentRef.set({
+        'name': department,
+        'createdAt': FieldValue.serverTimestamp(),
+        'members': {
+          user.uid: {
+            'fullname': _personalInfo.fullName,
+            'email': _personalInfo.email,
+            'uid': user.uid,
+            'addedAt': FieldValue.serverTimestamp(),
+          }
+        }
+      });
+      
+      _logger.i('_addToDepartmentMembers: ✓ New department created with employee as member');
+    } else {
+      _logger.i('_addToDepartmentMembers: Department exists, adding employee as member');
+      
+      // Add member to existing department
+      await departmentRef.update({
+        'members.${user.uid}': {
+          'fullname': _personalInfo.fullName,
+          'email': _personalInfo.email,
+          'uid': user.uid,
+          'addedAt': FieldValue.serverTimestamp(),
+        }
+      });
+      
+      _logger.i('_addToDepartmentMembers: ✓ Employee added to existing department');
+    }
+  } catch (e, stackTrace) {
+    _logger.e('_addToDepartmentMembers: Error adding to department', error: e, stackTrace: stackTrace);
+  }
+}
+
+// ✅ NEW: Remove employee from department members
+Future<void> _removeFromDepartmentMembers(String department) async {
+  _logger.i('_removeFromDepartmentMembers: Removing employee from department: $department');
+  
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logger.w('_removeFromDepartmentMembers: No authenticated user found');
+      return;
+    }
+
+    final departmentRef = FirebaseFirestore.instance
+        .collection('Departments')
+        .doc(department);
+
+    await departmentRef.update({
+      'members.${user.uid}': FieldValue.delete(),
+    });
+    
+    _logger.i('_removeFromDepartmentMembers: ✓ Employee removed from department');
+  } catch (e, stackTrace) {
+    _logger.e('_removeFromDepartmentMembers: Error removing from department', error: e, stackTrace: stackTrace);
+  }
+}
+
+  // Handle department change (remove from old, add to new)
+  Future<void> _handleDepartmentChange(String newDepartment) async {
+    _logger.i('_handleDepartmentChange: Department changed');
+    _logger.i('  - Previous: $_previousDepartment');
+    _logger.i('  - New: $newDepartment');
+    
+    // Remove from previous department if it exists and is different
+    if (_previousDepartment != null && 
+        _previousDepartment!.isNotEmpty && 
+        _previousDepartment != newDepartment) {
+      _logger.i('_handleDepartmentChange: Removing from previous department');
+      await _removeFromDepartmentMembers(_previousDepartment!);
+    }
+    
+    // Add to new department
+    if (newDepartment.isNotEmpty) {
+      _logger.i('_handleDepartmentChange: Adding to new department');
+      await _addToDepartmentMembers(newDepartment);
+      
+      // Update tracking variable
+      _previousDepartment = newDepartment;
+      _logger.i('_handleDepartmentChange: Previous department updated to: $_previousDepartment');
+    }
   }
 
   @override
@@ -693,9 +846,14 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
     
     setState(() => _isSaving = true);
 
-    try {
-      // Validate current form to ensure data is captured
-      _formKeys[_currentStep].currentState?.save();
+  try {
+    // Validate current form to ensure data is captured
+    _formKeys[_currentStep].currentState?.save();
+    
+    if (_employmentDetails.department.isNotEmpty) {
+      _logger.i('Department selected: ${_employmentDetails.department}');
+        await _handleDepartmentChange(_employmentDetails.department);
+      }
       
       _logger.d('Checking for existing employee data...');
       // Get existing data if updating
@@ -831,6 +989,12 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
         formKey.currentState?.save();
       }
 
+      // ✅ NEW: Handle department membership BEFORE validation
+      if (_employmentDetails.department.isNotEmpty) {
+        _logger.i('Ensuring department membership on submission: ${_employmentDetails.department}');
+        await _handleDepartmentChange(_employmentDetails.department);
+      }
+
       // Validate all required fields across all steps
       _logger.d('Validating all required fields...');
       bool isValid = true;
@@ -862,6 +1026,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
       if (!isValid) {
         _logger.w('Overall validation FAILED: $errorMessage');
         
+        // ✅ FIXED: Check mounted before using BuildContext
+        if (!mounted) return;
+        
         // Show error and navigate to the step with missing data
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -888,6 +1055,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
       
       _logger.i('All validations passed ✓');
 
+      // ✅ FIXED: Check mounted before showing dialog
+      if (!mounted) return;
+      
       // Confirm submission
       _logger.d('Showing confirmation dialog to user...');
       final confirm = await showDialog<bool>(
@@ -916,6 +1086,9 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
 
       if (confirm == true) {
         _logger.i('User confirmed submission');
+        
+        // ✅ FIXED: Check mounted before setState
+        if (!mounted) return;
         setState(() => _isSaving = true);
 
         try {
@@ -955,36 +1128,45 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
           await _firestoreService.saveEmployeeOnboarding(employee);
           _logger.i('✅ Application submitted successfully!');
 
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Application submitted successfully!'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
+          // ✅ FIXED: Check mounted before showing SnackBar
+          if (!mounted) return;
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Application submitted successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
 
-            // Navigate back after short delay
-            _logger.d('Waiting 2 seconds before navigating back...');
-            await Future.delayed(const Duration(seconds: 2));
-            if (mounted) {
-              _logger.i('Navigating back to dashboard');
-              Navigator.pop(context);
-            }
-          }
+          // Navigate back after short delay
+          _logger.d('Waiting 2 seconds before navigating back...');
+          await Future.delayed(const Duration(seconds: 2));
+          
+          // ✅ FIXED: Check mounted before Navigator.pop
+          if (!mounted) return;
+          
+          _logger.i('Navigating back to dashboard');
+          Navigator.pop(context);
+          
         } catch (e, stackTrace) {
           _logger.e('❌ ERROR SUBMITTING FORM', error: e, stackTrace: stackTrace);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error submitting form: $e'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 5),
-              ),
-            );
-          }
+          
+          // ✅ FIXED: Check mounted before showing error SnackBar
+          if (!mounted) return;
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error submitting form: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
         } finally {
-          setState(() => _isSaving = false);
+          // ✅ FIXED: Check mounted before setState
+          if (mounted) {
+            setState(() => _isSaving = false);
+          }
           _logger.d('=== FORM SUBMISSION COMPLETED ===');
         }
       } else {
@@ -1499,25 +1681,72 @@ class _EmployeeOnboardingWizardState extends State<EmployeeOnboardingWizard> {
             ),
             const SizedBox(height: 16),
             
-            // Department
-            TextFormField(
-              initialValue: _employmentDetails.department,
-              decoration: _inputDecoration('Department *'),
-              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-              onChanged: (value) {
-                setState(() {
-                  _employmentDetails = EmploymentDetails(
-                    jobTitle: _employmentDetails.jobTitle,
-                    department: value,
-                    employmentType: _employmentDetails.employmentType,
-                    startDate: _employmentDetails.startDate,
-                    workingHours: _employmentDetails.workingHours,
-                    workLocation: _employmentDetails.workLocation,
-                    supervisorName: _employmentDetails.supervisorName,
-                  );
-                });
-              },
-            ),
+            // ✅ CHANGED: Department - Now a Dropdown fetching from Firestore
+            _isLoadingDepartments
+                ? const LinearProgressIndicator()
+                : DropdownButtonFormField<String>(
+                    initialValue: _employmentDetails.department.isNotEmpty &&
+                            _availableDepartments.contains(_employmentDetails.department)
+                        ? _employmentDetails.department
+                        : null,
+                    decoration: _inputDecoration('Department *').copyWith(
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.refresh, size: 20),
+                            onPressed: _loadDepartments,
+                            tooltip: 'Refresh departments',
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
+                    hint: Text(
+                      _availableDepartments.isEmpty
+                          ? 'No departments available'
+                          : 'Select a department',
+                    ),
+                    items: _availableDepartments.isEmpty
+                        ? null
+                        : _availableDepartments.map((dept) {
+                            return DropdownMenuItem<String>(
+                              value: dept,
+                              child: Text(dept),
+                            );
+                          }).toList(),
+                    validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                    onChanged: _availableDepartments.isEmpty
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              _logger.i('Department selected: $value');
+                              
+                              setState(() {
+                                _employmentDetails = EmploymentDetails(
+                                  jobTitle: _employmentDetails.jobTitle,
+                                  department: value,
+                                  employmentType: _employmentDetails.employmentType,
+                                  startDate: _employmentDetails.startDate,
+                                  workingHours: _employmentDetails.workingHours,
+                                  workLocation: _employmentDetails.workLocation,
+                                  supervisorName: _employmentDetails.supervisorName,
+                                );
+                              });
+                            }
+                          },
+                  ),
+            if (_availableDepartments.isEmpty && !_isLoadingDepartments)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'No departments found. Please contact your administrator.',
+                  style: TextStyle(
+                    color: Colors.orange.shade700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
             
             // Employment Type
