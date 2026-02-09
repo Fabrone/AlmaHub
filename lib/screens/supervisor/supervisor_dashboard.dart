@@ -4,12 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'hours_entry_dialog.dart';
+import 'dart:async';
 
 /// Supervisor Dashboard
 /// Allows supervisors to:
 /// - View employees under their supervision/department
 /// - Monitor employee details and monthly hours worked
 /// - Forward approved hours to the Accountant for payroll processing
+/// 
+/// For Admin/HR/Accountant roles:
+/// - View all employees across all departments
+/// - Additional "Department" column in the table
 class SupervisorDashboard extends StatefulWidget {
   const SupervisorDashboard({super.key});
 
@@ -23,6 +28,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   
   String? _supervisorDepartment;
   String? _supervisorName;
+  String? _currentUserRole;
   bool _isLoadingSupervisorInfo = true;
   String _searchQuery = '';
   
@@ -48,72 +54,101 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   @override
   void initState() {
     super.initState();
-    _loadSupervisorInfo();
+    _loadCurrentUserRoleAndInfo();
   }
 
-  /// Load supervisor information from Firestore
-  Future<void> _loadSupervisorInfo() async {
+  /// Load current user's role and information
+  Future<void> _loadCurrentUserRoleAndInfo() async {
     if (_currentUser == null) {
       _logger.e('No current user found');
       setState(() => _isLoadingSupervisorInfo = false);
       return;
     }
 
-    _logger.i('Loading supervisor info for: ${_currentUser.email}');
+    _logger.i('Loading user info for: ${_currentUser.email}');
 
     try {
-      // Try to find supervisor in EmployeeDetails collection
-      final employeeQuery = await _firestore
-          .collection('EmployeeDetails')
-          .where('personalInfo.email', isEqualTo: _currentUser.email)
+      // Find user document by UID in Users collection
+      final userQuery = await _firestore
+          .collection('Users')
+          .where('uid', isEqualTo: _currentUser.uid)
           .limit(1)
           .get();
 
-      if (employeeQuery.docs.isNotEmpty) {
-        final data = employeeQuery.docs.first.data();
-        final employmentInfo = data['employmentInfo'] as Map<String, dynamic>?;
-        final personalInfo = data['personalInfo'] as Map<String, dynamic>?;
-
-        setState(() {
-          _supervisorDepartment = employmentInfo?['department'] ?? 'Unknown';
-          _supervisorName = personalInfo?['fullName'] ?? 'Unknown';
-          _isLoadingSupervisorInfo = false;
-        });
-
-        _logger.i('Supervisor loaded: $_supervisorName, Department: $_supervisorDepartment');
+      if (userQuery.docs.isEmpty) {
+        _logger.w('User not found in Users collection');
+        setState(() => _isLoadingSupervisorInfo = false);
         return;
       }
 
-      // If not found, try Draft collection
-      final draftQuery = await _firestore
-          .collection('Draft')
-          .where('personalInfo.email', isEqualTo: _currentUser.email)
-          .limit(1)
-          .get();
+      final userDoc = userQuery.docs.first;
+      final userData = userDoc.data();
+      
+      _currentUserRole = userData['role'] ?? 'Employee';
 
-      if (draftQuery.docs.isNotEmpty) {
-        final data = draftQuery.docs.first.data();
-        final employmentInfo = data['employmentInfo'] as Map<String, dynamic>?;
-        final personalInfo = data['personalInfo'] as Map<String, dynamic>?;
+      _logger.i('Current user role: $_currentUserRole');
 
-        setState(() {
-          _supervisorDepartment = employmentInfo?['department'] ?? 'Unknown';
-          _supervisorName = personalInfo?['fullName'] ?? 'Unknown';
-          _isLoadingSupervisorInfo = false;
-        });
-
-        _logger.i('Supervisor loaded from Draft: $_supervisorName, Department: $_supervisorDepartment');
-        return;
+      // If user is Supervisor, load their department
+      if (_currentUserRole == 'Supervisor') {
+        await _loadSupervisorDepartment();
+      } else {
+        // For Admin/HR/Accountant, set name from user data
+        _supervisorName = userData['fullname'] ?? userData['fullName'] ?? 'Unknown';
       }
 
-      // Supervisor not found in either collection
-      _logger.w('Supervisor not found in any collection');
       setState(() => _isLoadingSupervisorInfo = false);
 
-    } catch (e) {
-      _logger.e('Error loading supervisor info', error: e);
+    } catch (e, stackTrace) {
+      _logger.e('Error loading user info', error: e, stackTrace: stackTrace);
       setState(() => _isLoadingSupervisorInfo = false);
     }
+  }
+
+  /// Load supervisor's department from Supervisors collection
+  Future<void> _loadSupervisorDepartment() async {
+    try {
+      _logger.i('Loading supervisor department for UID: ${_currentUser!.uid}');
+
+      // Query Supervisors collection by UID
+      final supervisorQuery = await _firestore
+          .collection('Supervisors')
+          .where('uid', isEqualTo: _currentUser.uid)
+          .limit(1)
+          .get();
+
+      if (supervisorQuery.docs.isEmpty) {
+        _logger.w('Supervisor document not found');
+        return;
+      }
+
+      final supervisorData = supervisorQuery.docs.first.data();
+      
+      setState(() {
+        _supervisorDepartment = supervisorData['department'];
+        _supervisorName = supervisorData['fullname'];
+      });
+
+      _logger.i('Supervisor loaded: $_supervisorName, Department: $_supervisorDepartment');
+
+    } catch (e, stackTrace) {
+      _logger.e('Error loading supervisor department', error: e, stackTrace: stackTrace);
+    }
+  }
+
+  /// Check if current user can access this dashboard
+  bool _canAccessDashboard() {
+    return _currentUserRole != null && 
+           (_currentUserRole == 'Supervisor' || 
+            _currentUserRole == 'Admin' || 
+            _currentUserRole == 'HR' || 
+            _currentUserRole == 'Accountant');
+  }
+
+  /// Check if current user should see all departments
+  bool _shouldShowAllDepartments() {
+    return _currentUserRole == 'Admin' || 
+           _currentUserRole == 'HR' || 
+           _currentUserRole == 'Accountant';
   }
 
   @override
@@ -128,12 +163,12 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       );
     }
 
-    if (_supervisorDepartment == null) {
-      return _buildErrorScreen('Unable to load supervisor information');
+    if (!_canAccessDashboard()) {
+      return _buildAccessDeniedScreen();
     }
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 240, 235, 245), // Purple-tinted background
+      backgroundColor: const Color.fromARGB(255, 240, 235, 245),
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -159,11 +194,13 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color.fromARGB(255, 123, 31, 162), // Purple theme
+      backgroundColor: const Color.fromARGB(255, 123, 31, 162),
       elevation: 2,
-      title: const Text(
-        'Supervisor Dashboard',
-        style: TextStyle(
+      title: Text(
+        _shouldShowAllDepartments() 
+            ? '$_currentUserRole Dashboard - All Departments'
+            : 'Supervisor Dashboard',
+        style: const TextStyle(
           fontWeight: FontWeight.w900,
           color: Colors.white,
           letterSpacing: 0.5,
@@ -178,7 +215,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         IconButton(
           icon: const Icon(Icons.refresh, color: Colors.white),
           onPressed: () {
-            _logger.i('Refreshing supervisor dashboard');
+            _logger.i('Refreshing dashboard');
             setState(() {});
           },
           tooltip: 'Refresh',
@@ -195,8 +232,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color.fromARGB(255, 123, 31, 162), // Purple
-            Color.fromARGB(255, 156, 39, 176), // Lighter purple
+            Color.fromARGB(255, 123, 31, 162),
+            Color.fromARGB(255, 156, 39, 176),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
@@ -216,8 +253,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.supervisor_account,
+            child: Icon(
+              _shouldShowAllDepartments() ? Icons.admin_panel_settings : Icons.supervisor_account,
               size: 40,
               color: Colors.white,
             ),
@@ -227,9 +264,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Department Supervisor',
-                  style: TextStyle(
+                Text(
+                  _shouldShowAllDepartments() ? '$_currentUserRole View' : 'Department Supervisor',
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white70,
                     fontWeight: FontWeight.w500,
@@ -245,35 +282,66 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.business,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _supervisorDepartment ?? 'Unknown',
-                        style: const TextStyle(
-                          fontSize: 13,
+                if (!_shouldShowAllDepartments() && _supervisorDepartment != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.business,
+                          size: 14,
                           color: Colors.white,
-                          fontWeight: FontWeight.w600,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          _supervisorDepartment!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                if (_shouldShowAllDepartments())
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.domain,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'All Departments',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -378,25 +446,24 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   Widget _buildStatsCards() {
-    _logger.d('Building stats cards for department: $_supervisorDepartment');
+    _logger.d('Building stats cards');
     
-    return StreamBuilder<QuerySnapshot>(
-      stream: _getEmployeesStream(),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _getEmployeesDataStream(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.hasError) {
           return const SizedBox.shrink();
         }
 
-        final employees = snapshot.data!.docs;
+        final employees = snapshot.data!;
         final totalEmployees = employees.length;
         
         // Calculate total hours for selected month
         double totalHours = 0;
         int employeesWithHours = 0;
         
-        for (var doc in employees) {
-          final data = doc.data() as Map<String, dynamic>;
-          final hoursWorked = _getMonthlyHours(data);
+        for (var employee in employees) {
+          final hoursWorked = _getMonthlyHours(employee);
           if (hoursWorked > 0) {
             totalHours += hoursWorked;
             employeesWithHours++;
@@ -408,7 +475,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         return LayoutBuilder(
           builder: (context, constraints) {
             final screenWidth = constraints.maxWidth;
-            final cardWidth = screenWidth * 0.235; // Match accountant dashboard sizing
+            final cardWidth = screenWidth * 0.235;
             final spacing = screenWidth * 0.015;
             
             return Container(
@@ -561,8 +628,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildTableHeader(screenWidth),
-              StreamBuilder<QuerySnapshot>(
-                stream: _getEmployeesStream(),
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _getEmployeesDataStream(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     _logger.e('Error in employee stream', error: snapshot.error);
@@ -581,21 +648,22 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                     );
                   }
 
-                  final allEmployees = snapshot.data!.docs;
-                  _logger.i('Loaded ${allEmployees.length} employees in department: $_supervisorDepartment');
+                  final allEmployees = snapshot.data ?? [];
+                  _logger.i('Loaded ${allEmployees.length} employees');
 
                   // Apply search filter
                   final employees = _searchQuery.isEmpty
                       ? allEmployees
-                      : allEmployees.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final fullName = (data['personalInfo']?['fullName'] ?? '').toString().toLowerCase();
-                          final email = (data['personalInfo']?['email'] ?? '').toString().toLowerCase();
-                          final jobTitle = (data['employmentInfo']?['jobTitle'] ?? '').toString().toLowerCase();
+                      : allEmployees.where((employee) {
+                          final fullName = (employee['fullName'] ?? '').toString().toLowerCase();
+                          final email = (employee['email'] ?? '').toString().toLowerCase();
+                          final jobTitle = (employee['jobTitle'] ?? '').toString().toLowerCase();
+                          final department = (employee['department'] ?? '').toString().toLowerCase();
                           
                           return fullName.contains(_searchQuery) ||
                                  email.contains(_searchQuery) ||
-                                 jobTitle.contains(_searchQuery);
+                                 jobTitle.contains(_searchQuery) ||
+                                 department.contains(_searchQuery);
                         }).toList();
 
                   if (employees.isEmpty) {
@@ -615,7 +683,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                           Text(
                             _searchQuery.isNotEmpty
                                 ? 'No results found for "$_searchQuery"'
-                                : 'No employees in your department',
+                                : _shouldShowAllDepartments()
+                                    ? 'No employees found in any department'
+                                    : 'No employees in your department',
                             style: const TextStyle(fontSize: 16, color: Colors.grey),
                           ),
                           if (_searchQuery.isNotEmpty) ...[
@@ -653,42 +723,43 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                         fontSize: 13,
                         color: Colors.black87,
                       ),
-                      columns: const [
-                        DataColumn(label: Text('No.')),
-                        DataColumn(label: Text('Full Name')),
-                        DataColumn(label: Text('Email')),
-                        DataColumn(label: Text('Job Title')),
-                        DataColumn(label: Text('Department')),
-                        DataColumn(label: Text('Employment Type')),
-                        DataColumn(label: Text('Hours Worked')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Actions')),
+                      columns: [
+                        const DataColumn(label: Text('No.')),
+                        const DataColumn(label: Text('Full Name')),
+                        const DataColumn(label: Text('Email')),
+                        const DataColumn(label: Text('Job Title')),
+                        if (_shouldShowAllDepartments())
+                          const DataColumn(label: Text('Department')),
+                        const DataColumn(label: Text('Employment Type')),
+                        const DataColumn(label: Text('Hours Worked')),
+                        const DataColumn(label: Text('Performance %')),
+                        const DataColumn(label: Text('Status')),
+                        const DataColumn(label: Text('Actions')),
                       ],
                       rows: employees.asMap().entries.map((entry) {
                         final index = entry.key;
-                        final doc = entry.value;
-                        final data = doc.data() as Map<String, dynamic>;
-                        final personalInfo = data['personalInfo'] as Map<String, dynamic>? ?? {};
-                        final employmentInfo = data['employmentInfo'] as Map<String, dynamic>? ?? {};
+                        final employee = entry.value;
                         
-                        final fullName = personalInfo['fullName'] ?? '-';
-                        final email = personalInfo['email'] ?? '-';
-                        final jobTitle = employmentInfo['jobTitle'] ?? '-';
-                        final department = employmentInfo['department'] ?? '-';
-                        final employmentType = employmentInfo['employmentType'] ?? '-';
-                        final hoursWorked = _getMonthlyHours(data);
-                        final status = data['status'] ?? 'draft';
+                        final uid = employee['uid'] ?? '';
+                        final fullName = employee['fullName'] ?? '-';
+                        final email = employee['email'] ?? '-';
+                        final jobTitle = employee['jobTitle'] ?? '-';
+                        final department = employee['department'] ?? '-';
+                        final employmentType = employee['employmentType'] ?? '-';
+                        final hoursWorked = _getMonthlyHours(employee);
+                        final status = employee['status'] ?? 'draft';
+                        final performancePercent = _calculatePerformancePercentage(hoursWorked);
 
-                        final isSelected = _selectedEmployees.contains(doc.id);
+                        final isSelected = _selectedEmployees.contains(uid);
 
                         return DataRow(
                           selected: isSelected,
                           onSelectChanged: (selected) {
                             setState(() {
                               if (selected == true) {
-                                _selectedEmployees.add(doc.id);
+                                _selectedEmployees.add(uid);
                               } else {
-                                _selectedEmployees.remove(doc.id);
+                                _selectedEmployees.remove(uid);
                               }
                             });
                             _logger.d('Employee ${selected == true ? "selected" : "deselected"}: $fullName');
@@ -723,7 +794,27 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                 ),
                               ),
                             ),
-                            DataCell(Text(department)),
+                            if (_shouldShowAllDepartments())
+                              DataCell(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    department,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: Color.fromARGB(255, 123, 31, 162),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             DataCell(_buildEmploymentTypeBadge(employmentType)),
                             DataCell(
                               Container(
@@ -751,6 +842,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                 ),
                               ),
                             ),
+                            DataCell(_buildPerformanceBadge(performancePercent)),
                             DataCell(_buildStatusBadge(status)),
                             DataCell(
                               Row(
@@ -763,8 +855,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                       color: Color.fromARGB(255, 123, 31, 162),
                                     ),
                                     onPressed: () {
-                                      _logger.i('Log hours for: ${doc.id}');
-                                      _showHoursEntryDialog(doc.id, fullName, department);
+                                      _logger.i('Log hours for: $uid');
+                                      _showHoursEntryDialog(uid, fullName, department);
                                     },
                                     tooltip: 'Log Hours',
                                   ),
@@ -775,8 +867,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                       color: Color.fromARGB(255, 123, 31, 162),
                                     ),
                                     onPressed: () {
-                                      _logger.i('View details for: ${doc.id}');
-                                      _viewEmployeeDetails(doc.id, data);
+                                      _logger.i('View details for: $uid');
+                                      _viewEmployeeDetails(uid, employee);
                                     },
                                     tooltip: 'View Details',
                                   ),
@@ -837,7 +929,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Department Employees',
+                  _shouldShowAllDepartments() 
+                      ? 'All Department Employees'
+                      : 'Department Employees',
                   style: TextStyle(
                     fontSize: titleSize,
                     fontWeight: FontWeight.bold,
@@ -846,7 +940,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Manage hours and employee information for ${_supervisorDepartment ?? "your department"}',
+                  _shouldShowAllDepartments()
+                      ? 'Manage hours and employee information across all departments'
+                      : 'Manage hours and employee information for $_supervisorDepartment',
                   style: TextStyle(
                     fontSize: subtitleSize,
                     color: Colors.white70,
@@ -881,6 +977,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     IconData icon;
     
     switch (type.toLowerCase()) {
+      case 'permanent':
       case 'full-time':
         color = const Color.fromARGB(255, 46, 125, 50);
         icon = Icons.work;
@@ -893,6 +990,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         color = const Color.fromARGB(255, 255, 152, 0);
         icon = Icons.description;
         break;
+      case 'casual':
       case 'intern':
         color = const Color.fromARGB(255, 123, 31, 162);
         icon = Icons.school;
@@ -916,6 +1014,49 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           const SizedBox(width: 6),
           Text(
             type,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceBadge(double percentage) {
+    Color color;
+    IconData icon;
+    
+    if (percentage >= 90) {
+      color = const Color.fromARGB(255, 46, 125, 50);
+      icon = Icons.trending_up;
+    } else if (percentage >= 70) {
+      color = const Color.fromARGB(255, 2, 136, 209);
+      icon = Icons.trending_flat;
+    } else if (percentage >= 50) {
+      color = const Color.fromARGB(255, 255, 152, 0);
+      icon = Icons.trending_down;
+    } else {
+      color = Colors.red;
+      icon = Icons.warning;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '${percentage.toStringAsFixed(0)}%',
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w600,
@@ -992,24 +1133,201 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     );
   }
 
-  Stream<QuerySnapshot> _getEmployeesStream() {
-    _logger.d('Getting employees stream for department: $_supervisorDepartment');
+  /// Get employees data stream - fetches from Departments collection
+  Stream<List<Map<String, dynamic>>> _getEmployeesDataStream() async* {
+    _logger.i('=== Getting Employees Data Stream ===');
     
-    return _firestore
-        .collection('EmployeeDetails')
-        .where('employmentInfo.department', isEqualTo: _supervisorDepartment)
-        .snapshots();
+    try {
+      if (_shouldShowAllDepartments()) {
+        // Admin/HR/Accountant: Get all departments
+        _logger.i('Fetching all departments for $_currentUserRole');
+        
+        await for (final deptSnapshot in _firestore.collection('Departments').snapshots()) {
+          final List<Map<String, dynamic>> allEmployees = [];
+          
+          for (final deptDoc in deptSnapshot.docs) {
+            final deptData = deptDoc.data();
+            final deptName = deptDoc.id;
+            final members = deptData['members'] as Map<String, dynamic>? ?? {};
+            
+            _logger.d('Processing department: $deptName with ${members.length} members');
+            
+            for (final memberEntry in members.entries) {
+              final uid = memberEntry.key;
+              final memberData = memberEntry.value as Map<String, dynamic>?;
+              
+              if (memberData == null) continue;
+              
+              // Fetch additional employee details from EmployeeDetails
+              final employeeDetails = await _getEmployeeDetails(uid);
+              
+              allEmployees.add({
+                'uid': uid,
+                'fullName': memberData['fullname'] ?? memberData['fullName'] ?? 'Unknown',
+                'email': memberData['email'] ?? 'Unknown',
+                'department': deptName,
+                ...employeeDetails,
+              });
+            }
+          }
+          
+          _logger.i('Total employees across all departments: ${allEmployees.length}');
+          yield allEmployees;
+        }
+      } else {
+        // Supervisor: Get only their department
+        if (_supervisorDepartment == null) {
+          _logger.w('Supervisor department is null');
+          yield [];
+          return;
+        }
+        
+        _logger.i('Fetching department: $_supervisorDepartment');
+        
+        await for (final deptSnapshot in _firestore
+            .collection('Departments')
+            .doc(_supervisorDepartment)
+            .snapshots()) {
+          
+          if (!deptSnapshot.exists) {
+            _logger.w('Department document does not exist: $_supervisorDepartment');
+            yield [];
+            continue;
+          }
+          
+          final deptData = deptSnapshot.data()!;
+          final members = deptData['members'] as Map<String, dynamic>? ?? {};
+          
+          _logger.d('Department $_supervisorDepartment has ${members.length} members');
+          
+          final List<Map<String, dynamic>> employees = [];
+          
+          for (final memberEntry in members.entries) {
+            final uid = memberEntry.key;
+            final memberData = memberEntry.value as Map<String, dynamic>?;
+            
+            if (memberData == null) continue;
+            
+            // Fetch additional employee details
+            final employeeDetails = await _getEmployeeDetails(uid);
+            
+            employees.add({
+              'uid': uid,
+              'fullName': memberData['fullname'] ?? memberData['fullName'] ?? 'Unknown',
+              'email': memberData['email'] ?? 'Unknown',
+              'department': _supervisorDepartment!,
+              ...employeeDetails,
+            });
+          }
+          
+          _logger.i('Loaded ${employees.length} employees for department: $_supervisorDepartment');
+          yield employees;
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Error in getEmployeesDataStream', error: e, stackTrace: stackTrace);
+      yield [];
+    }
+  }
+
+  /// Get additional employee details from EmployeeDetails or Draft collections
+  Future<Map<String, dynamic>> _getEmployeeDetails(String uid) async {
+    try {
+      // Try EmployeeDetails first
+      final employeeQuery = await _firestore
+          .collection('EmployeeDetails')
+          .where('uid', isEqualTo: uid)
+          .limit(1)
+          .get();
+
+      if (employeeQuery.docs.isNotEmpty) {
+        final data = employeeQuery.docs.first.data();
+        return {
+          'jobTitle': data['employmentDetails']?['jobTitle'] ?? 
+                     data['employmentInfo']?['jobTitle'] ?? '-',
+          'employmentType': data['employmentDetails']?['employmentType'] ?? 
+                          data['employmentInfo']?['employmentType'] ?? '-',
+          'status': data['status'] ?? 'submitted',
+          'hoursWorked': data['hoursWorked'] ?? {},
+        };
+      }
+
+      // Try Draft collection
+      final draftQuery = await _firestore
+          .collection('Draft')
+          .where('uid', isEqualTo: uid)
+          .limit(1)
+          .get();
+
+      if (draftQuery.docs.isNotEmpty) {
+        final data = draftQuery.docs.first.data();
+        return {
+          'jobTitle': data['employmentDetails']?['jobTitle'] ?? 
+                     data['employmentInfo']?['jobTitle'] ?? '-',
+          'employmentType': data['employmentDetails']?['employmentType'] ?? 
+                          data['employmentInfo']?['employmentType'] ?? '-',
+          'status': data['status'] ?? 'draft',
+          'hoursWorked': data['hoursWorked'] ?? {},
+        };
+      }
+
+      // Return defaults if not found
+      return {
+        'jobTitle': '-',
+        'employmentType': '-',
+        'status': 'draft',
+        'hoursWorked': {},
+      };
+
+    } catch (e) {
+      _logger.e('Error fetching employee details for UID: $uid', error: e);
+      return {
+        'jobTitle': '-',
+        'employmentType': '-',
+        'status': 'unknown',
+        'hoursWorked': {},
+      };
+    }
   }
 
   double _getMonthlyHours(Map<String, dynamic> employeeData) {
     final monthKey = DateFormat('yyyy-MM').format(_selectedMonth);
-    final hoursData = employeeData['hoursWorked'] as Map<String, dynamic>?;
+    final hoursData = employeeData['hoursWorked'];
     
-    if (hoursData == null || !hoursData.containsKey(monthKey)) {
+    // Handle null or non-map hoursData
+    if (hoursData == null) {
       return 0.0;
     }
     
-    return (hoursData[monthKey] ?? 0).toDouble();
+    // Convert to proper Map type
+    final Map<String, dynamic> hoursMap;
+    if (hoursData is Map<String, dynamic>) {
+      hoursMap = hoursData;
+    } else if (hoursData is Map) {
+      // Convert LinkedMap or other Map types to Map<String, dynamic>
+      hoursMap = Map<String, dynamic>.from(hoursData);
+    } else {
+      return 0.0;
+    }
+    
+    if (!hoursMap.containsKey(monthKey)) {
+      return 0.0;
+    }
+    
+    final value = hoursMap[monthKey];
+    if (value is num) {
+      return value.toDouble();
+    }
+    
+    return 0.0;
+  }
+
+  /// Calculate performance percentage based on hours worked
+  /// Assumes 160 hours/month as 100% (standard full-time)
+  double _calculatePerformancePercentage(double hoursWorked) {
+    const standardMonthlyHours = 160.0; // 40 hours/week * 4 weeks
+    if (hoursWorked <= 0) return 0.0;
+    return (hoursWorked / standardMonthlyHours * 100).clamp(0.0, 100.0);
   }
 
   void _showSearchDialog() {
@@ -1020,7 +1338,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         content: TextField(
           autofocus: true,
           decoration: const InputDecoration(
-            hintText: 'Enter name, email, or job title...',
+            hintText: 'Enter name, email, job title, or department...',
             prefixIcon: Icon(Icons.search),
             border: OutlineInputBorder(),
           ),
@@ -1052,44 +1370,52 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     );
   }
 
-  void _viewEmployeeDetails(String employeeId, Map<String, dynamic> data) {
+  void _viewEmployeeDetails(String uid, Map<String, dynamic> employee) {
     _logger.i('=== VIEW EMPLOYEE DETAILS ===');
-    _logger.d('Employee ID: $employeeId');
+    _logger.d('Employee UID: $uid');
     
-    final personalInfo = data['personalInfo'] as Map<String, dynamic>? ?? {};
-    final employmentInfo = data['employmentInfo'] as Map<String, dynamic>? ?? {};
-    final hoursWorked = _getMonthlyHours(data);
+    final fullName = employee['fullName'] ?? 'Unknown';
+    final email = employee['email'] ?? 'Unknown';
+    final jobTitle = employee['jobTitle'] ?? '-';
+    final department = employee['department'] ?? '-';
+    final employmentType = employee['employmentType'] ?? '-';
+    final hoursWorked = _getMonthlyHours(employee);
+    final performancePercent = _calculatePerformancePercentage(hoursWorked);
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Employee Details - ${personalInfo['fullName'] ?? 'Unknown'}'),
+        title: Text('Employee Details - $fullName'),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildDetailSection('Personal Information', [
-                _buildDetailRow('Full Name', personalInfo['fullName'] ?? '-'),
-                _buildDetailRow('Email', personalInfo['email'] ?? '-'),
-                _buildDetailRow('Phone', personalInfo['phoneNumber'] ?? '-'),
+                _buildDetailRow('Full Name', fullName),
+                _buildDetailRow('Email', email),
               ]),
               const Divider(height: 24),
               _buildDetailSection('Employment Information', [
-                _buildDetailRow('Job Title', employmentInfo['jobTitle'] ?? '-'),
-                _buildDetailRow('Department', employmentInfo['department'] ?? '-'),
-                _buildDetailRow('Employment Type', employmentInfo['employmentType'] ?? '-'),
-                _buildDetailRow('Start Date', employmentInfo['startDate'] ?? '-'),
+                _buildDetailRow('Job Title', jobTitle),
+                _buildDetailRow('Department', department),
+                _buildDetailRow('Employment Type', employmentType),
               ]),
               const Divider(height: 24),
               _buildDetailSection(
-                'Hours Worked - ${DateFormat('MMMM yyyy').format(_selectedMonth)}',
+                'Performance - ${DateFormat('MMMM yyyy').format(_selectedMonth)}',
                 [
                   _buildDetailRow(
                     'Total Hours',
                     hoursWorked > 0
                         ? '${NumberFormat('#,##0.0').format(hoursWorked)} hours'
                         : 'No hours logged',
+                  ),
+                  _buildDetailRow(
+                    'Performance',
+                    hoursWorked > 0
+                        ? '${performancePercent.toStringAsFixed(1)}%'
+                        : 'N/A',
                   ),
                 ],
               ),
@@ -1164,24 +1490,26 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     setState(() => _isForwarding = true);
 
     try {
-      final employeeData = <Map<String, dynamic>>[];
+      final employeeDataList = <Map<String, dynamic>>[];
       
-      for (final employeeId in _selectedEmployees) {
-        final doc = await _firestore
-            .collection('EmployeeDetails')
-            .doc(employeeId)
-            .get();
+      // Get current employees data
+      final currentEmployees = await _getEmployeesDataStream().first;
+      
+      for (final uid in _selectedEmployees) {
+        final employee = currentEmployees.firstWhere(
+          (e) => e['uid'] == uid,
+          orElse: () => <String, dynamic>{},
+        );
         
-        if (doc.exists) {
-          final data = doc.data()!;
-          final hoursWorked = _getMonthlyHours(data);
+        if (employee.isNotEmpty) {
+          final hoursWorked = _getMonthlyHours(employee);
           
-          employeeData.add({
-            'employeeId': employeeId,
-            'fullName': data['personalInfo']?['fullName'] ?? 'Unknown',
-            'email': data['personalInfo']?['email'] ?? 'Unknown',
-            'department': data['employmentInfo']?['department'] ?? 'Unknown',
-            'jobTitle': data['employmentInfo']?['jobTitle'] ?? 'Unknown',
+          employeeDataList.add({
+            'employeeId': uid,
+            'fullName': employee['fullName'] ?? 'Unknown',
+            'email': employee['email'] ?? 'Unknown',
+            'department': employee['department'] ?? 'Unknown',
+            'jobTitle': employee['jobTitle'] ?? 'Unknown',
             'hoursWorked': hoursWorked,
             'month': DateFormat('yyyy-MM').format(_selectedMonth),
             'monthDisplay': DateFormat('MMMM yyyy').format(_selectedMonth),
@@ -1193,14 +1521,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         'supervisorId': _currentUser!.uid,
         'supervisorName': _supervisorName,
         'supervisorEmail': _currentUser.email,
-        'department': _supervisorDepartment,
+        'supervisorRole': _currentUserRole,
+        'department': _supervisorDepartment ?? 'All Departments',
         'month': DateFormat('yyyy-MM').format(_selectedMonth),
         'monthDisplay': DateFormat('MMMM yyyy').format(_selectedMonth),
-        'employees': employeeData,
+        'employees': employeeDataList,
         'forwardedAt': FieldValue.serverTimestamp(),
         'status': 'pending',
-        'totalEmployees': employeeData.length,
-        'totalHours': employeeData.fold<double>(
+        'totalEmployees': employeeDataList.length,
+        'totalHours': employeeDataList.fold<double>(
           0,
           (total, emp) => total + (emp['hoursWorked'] as double),
         ),
@@ -1218,7 +1547,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Successfully forwarded hours for ${employeeData.length} employees to Accountant',
+            'Successfully forwarded hours for ${employeeDataList.length} employees to Accountant',
           ),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
@@ -1242,13 +1571,13 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     }
   }
 
-  void _showHoursEntryDialog(String employeeId, String employeeName, String department) {
+  void _showHoursEntryDialog(String uid, String employeeName, String department) {
     _logger.i('Opening hours entry dialog for: $employeeName');
     
     showDialog(
       context: context,
       builder: (context) => HoursEntryDialog(
-        employeeId: employeeId,
+        employeeId: uid,
         employeeName: employeeName,
         department: department,
       ),
@@ -1260,7 +1589,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     });
   }
 
-  Widget _buildErrorScreen(String message) {
+  Widget _buildAccessDeniedScreen() {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -1294,18 +1623,27 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                       ],
                     ),
                     child: const Icon(
-                      Icons.error_outline,
+                      Icons.lock_outline,
                       size: 80,
                       color: Colors.red,
                     ),
                   ),
                   const SizedBox(height: 32),
-                  Text(
-                    message,
-                    style: const TextStyle(
-                      fontSize: 20,
+                  const Text(
+                    'Access Restricted',
+                    style: TextStyle(
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Only Supervisors, Admins, HR, and Accountants can access this dashboard.\n\nYour current role: ${_currentUserRole ?? 'Unknown'}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white70,
                     ),
                     textAlign: TextAlign.center,
                   ),
