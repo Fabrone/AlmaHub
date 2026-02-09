@@ -177,7 +177,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               child: Column(
                 children: [
                   _buildDepartmentHeader(),
-                  _buildMonthSelector(),
                   _buildStatsCards(),
                   _buildEmployeeTable(),
                 ],
@@ -350,95 +349,148 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     );
   }
 
-  Widget _buildMonthSelector() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.calendar_month,
-            color: Color.fromARGB(255, 123, 31, 162),
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          const Text(
-            'Viewing Hours For:',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+  Widget _buildMonthSelectorCard(double cardWidth) {
+    return GestureDetector(
+      onTap: _showMonthPickerDialog,
+      child: Container(
+        width: cardWidth,
+        padding: EdgeInsets.symmetric(
+          horizontal: cardWidth * 0.05,
+          vertical: 8.0,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(cardWidth * 0.04),
               decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: const Color.fromARGB(255, 156, 39, 176).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Icon(
+                Icons.calendar_month,
+                color: const Color.fromARGB(255, 156, 39, 176),
+                size: (cardWidth * 0.08).clamp(16.0, 22.0),
+              ),
+            ),
+            SizedBox(width: cardWidth * 0.05),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    DateFormat('MMMM yyyy').format(_selectedMonth),
-                    style: const TextStyle(
-                      fontSize: 15,
+                    DateFormat('MMM yyyy').format(_selectedMonth),
+                    style: TextStyle(
+                      fontSize: (cardWidth * 0.055).clamp(12.0, 16.0),
                       fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 123, 31, 162),
+                      color: const Color.fromARGB(255, 123, 31, 162),
                     ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
-                  PopupMenuButton<DateTime>(
-                    icon: const Icon(
-                      Icons.arrow_drop_down,
-                      color: Color.fromARGB(255, 123, 31, 162),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Viewing Period',
+                    style: TextStyle(
+                      fontSize: (cardWidth * 0.045).clamp(10.0, 12.0),
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
                     ),
-                    onSelected: (DateTime newMonth) {
-                      _logger.i('Month changed to: ${DateFormat('MMMM yyyy').format(newMonth)}');
-                      setState(() {
-                        _selectedMonth = newMonth;
-                        _selectedEmployees.clear();
-                      });
-                    },
-                    itemBuilder: (context) {
-                      final List<DateTime> months = [];
-                      final now = DateTime.now();
-                      
-                      for (int i = 0; i < 12; i++) {
-                        months.add(DateTime(now.year, now.month - i, 1));
-                      }
-                      
-                      return months.map((month) {
-                        return PopupMenuItem<DateTime>(
-                          value: month,
-                          child: Text(
-                            DateFormat('MMMM yyyy').format(month),
-                            style: TextStyle(
-                              fontWeight: month.month == _selectedMonth.month &&
-                                          month.year == _selectedMonth.year
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        );
-                      }).toList();
-                    },
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ],
               ),
             ),
+            Icon(
+              Icons.arrow_drop_down,
+              color: const Color.fromARGB(255, 123, 31, 162),
+              size: (cardWidth * 0.08).clamp(18.0, 24.0),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMonthPickerDialog() {
+    final List<DateTime> months = [];
+    final now = DateTime.now();
+    
+    for (int i = 0; i < 12; i++) {
+      months.add(DateTime(now.year, now.month - i, 1));
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(
+              Icons.calendar_month,
+              color: Color.fromARGB(255, 123, 31, 162),
+            ),
+            SizedBox(width: 12),
+            Text('Select Viewing Period'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.minPositive,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: months.length,
+            itemBuilder: (context, index) {
+              final month = months[index];
+              final isSelected = month.month == _selectedMonth.month &&
+                  month.year == _selectedMonth.year;
+              
+              return ListTile(
+                selected: isSelected,
+                selectedTileColor: const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1),
+                leading: Icon(
+                  isSelected ? Icons.check_circle : Icons.calendar_today,
+                  color: isSelected
+                      ? const Color.fromARGB(255, 123, 31, 162)
+                      : Colors.grey,
+                ),
+                title: Text(
+                  DateFormat('MMMM yyyy').format(month),
+                  style: TextStyle(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected
+                        ? const Color.fromARGB(255, 123, 31, 162)
+                        : Colors.black87,
+                  ),
+                ),
+                onTap: () {
+                  _logger.i('Month changed to: ${DateFormat('MMMM yyyy').format(month)}');
+                  setState(() {
+                    _selectedMonth = month;
+                    _selectedEmployees.clear();
+                  });
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
         ],
       ),
@@ -475,7 +527,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         return LayoutBuilder(
           builder: (context, constraints) {
             final screenWidth = constraints.maxWidth;
-            final cardWidth = screenWidth * 0.235;
+            // Calculate card width for 5 cards with proper spacing
+            final cardWidth = (screenWidth - (screenWidth * 0.04 * 2) - (screenWidth * 0.015 * 4)) / 5;
             final spacing = screenWidth * 0.015;
             
             return Container(
@@ -487,6 +540,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    _buildMonthSelectorCard(cardWidth),
+                    SizedBox(width: spacing),
                     _buildStatCard(
                       'Team Members',
                       totalEmployees.toString(),
@@ -845,34 +900,17 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                             DataCell(_buildPerformanceBadge(performancePercent)),
                             DataCell(_buildStatusBadge(status)),
                             DataCell(
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle,
-                                      size: 20,
-                                      color: Color.fromARGB(255, 123, 31, 162),
-                                    ),
-                                    onPressed: () {
-                                      _logger.i('Log hours for: $uid');
-                                      _showHoursEntryDialog(uid, fullName, department);
-                                    },
-                                    tooltip: 'Log Hours',
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.visibility,
-                                      size: 20,
-                                      color: Color.fromARGB(255, 123, 31, 162),
-                                    ),
-                                    onPressed: () {
-                                      _logger.i('View details for: $uid');
-                                      _viewEmployeeDetails(uid, employee);
-                                    },
-                                    tooltip: 'View Details',
-                                  ),
-                                ],
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.add_circle,
+                                  size: 20,
+                                  color: Color.fromARGB(255, 123, 31, 162),
+                                ),
+                                onPressed: () {
+                                  _logger.i('Log hours for: $uid');
+                                  _showHoursEntryDialog(uid, fullName, department);
+                                },
+                                tooltip: 'Log Hours',
                               ),
                             ),
                           ],
@@ -1364,113 +1402,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               backgroundColor: const Color.fromARGB(255, 123, 31, 162),
             ),
             child: const Text('Search'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _viewEmployeeDetails(String uid, Map<String, dynamic> employee) {
-    _logger.i('=== VIEW EMPLOYEE DETAILS ===');
-    _logger.d('Employee UID: $uid');
-    
-    final fullName = employee['fullName'] ?? 'Unknown';
-    final email = employee['email'] ?? 'Unknown';
-    final jobTitle = employee['jobTitle'] ?? '-';
-    final department = employee['department'] ?? '-';
-    final employmentType = employee['employmentType'] ?? '-';
-    final hoursWorked = _getMonthlyHours(employee);
-    final performancePercent = _calculatePerformancePercentage(hoursWorked);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Employee Details - $fullName'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDetailSection('Personal Information', [
-                _buildDetailRow('Full Name', fullName),
-                _buildDetailRow('Email', email),
-              ]),
-              const Divider(height: 24),
-              _buildDetailSection('Employment Information', [
-                _buildDetailRow('Job Title', jobTitle),
-                _buildDetailRow('Department', department),
-                _buildDetailRow('Employment Type', employmentType),
-              ]),
-              const Divider(height: 24),
-              _buildDetailSection(
-                'Performance - ${DateFormat('MMMM yyyy').format(_selectedMonth)}',
-                [
-                  _buildDetailRow(
-                    'Total Hours',
-                    hoursWorked > 0
-                        ? '${NumberFormat('#,##0.0').format(hoursWorked)} hours'
-                        : 'No hours logged',
-                  ),
-                  _buildDetailRow(
-                    'Performance',
-                    hoursWorked > 0
-                        ? '${performancePercent.toStringAsFixed(1)}%'
-                        : 'N/A',
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Color.fromARGB(255, 123, 31, 162),
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...children,
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.black54),
-            ),
           ),
         ],
       ),
