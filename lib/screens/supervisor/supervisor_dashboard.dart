@@ -54,6 +54,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   @override
   void initState() {
     super.initState();
+    _logger.i('=== SUPERVISOR DASHBOARD INITIALIZED ===');
     _loadCurrentUserRoleAndInfo();
   }
 
@@ -498,12 +499,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   Widget _buildStatsCards() {
-    _logger.d('Building stats cards');
+    _logger.d('Building stats cards for month: ${DateFormat('MMM yyyy').format(_selectedMonth)}');
     
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _getEmployeesDataStream(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.hasError) {
+          if (snapshot.hasError) {
+            _logger.e('Error in stats stream', error: snapshot.error);
+          }
           return const SizedBox.shrink();
         }
 
@@ -524,10 +528,11 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
         final avgHours = totalEmployees > 0 ? totalHours / totalEmployees : 0;
 
+        _logger.d('Stats: Total=$totalEmployees, TotalHours=$totalHours, AvgHours=$avgHours, WithHours=$employeesWithHours');
+
         return LayoutBuilder(
           builder: (context, constraints) {
             final screenWidth = constraints.maxWidth;
-            // Calculate card width for 5 cards with proper spacing
             final cardWidth = (screenWidth - (screenWidth * 0.04 * 2) - (screenWidth * 0.015 * 4)) / 5;
             final spacing = screenWidth * 0.015;
             
@@ -807,6 +812,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
                         final isSelected = _selectedEmployees.contains(uid);
 
+                        _logger.d('Row $index: $fullName - Hours: $hoursWorked, Status: $status');
+
                         return DataRow(
                           selected: isSelected,
                           onSelectChanged: (selected) {
@@ -907,7 +914,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                   color: Color.fromARGB(255, 123, 31, 162),
                                 ),
                                 onPressed: () {
-                                  _logger.i('Log hours for: $uid');
+                                  _logger.i('Log hours for: $uid ($fullName)');
                                   _showHoursEntryDialog(uid, fullName, department);
                                 },
                                 tooltip: 'Log Hours',
@@ -1174,6 +1181,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   /// Get employees data stream - fetches from Departments collection
   Stream<List<Map<String, dynamic>>> _getEmployeesDataStream() async* {
     _logger.i('=== Getting Employees Data Stream ===');
+    _logger.i('Selected month: ${DateFormat('MMM yyyy').format(_selectedMonth)}');
     
     try {
       if (_shouldShowAllDepartments()) {
@@ -1268,57 +1276,92 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     }
   }
 
-  /// Get additional employee details from EmployeeDetails or Draft collections
   Future<Map<String, dynamic>> _getEmployeeDetails(String uid) async {
+    _logger.d('=== 🔍 GETTING EMPLOYEE DETAILS ===');
+    _logger.d('UID: $uid');
+    
     try {
       // Try EmployeeDetails first
+      _logger.d('   Searching EmployeeDetails collection...');
       final employeeQuery = await _firestore
           .collection('EmployeeDetails')
           .where('uid', isEqualTo: uid)
           .limit(1)
           .get();
 
+      String? documentId;
+      String? collectionName;
+      Map<String, dynamic>? data;
+
       if (employeeQuery.docs.isNotEmpty) {
-        final data = employeeQuery.docs.first.data();
+        documentId = employeeQuery.docs.first.id;
+        collectionName = 'EmployeeDetails';
+        data = employeeQuery.docs.first.data();
+        _logger.i('   ✅ Found in EmployeeDetails, Doc ID: $documentId');
+      } else {
+        // Try Draft collection
+        _logger.d('   Not in EmployeeDetails, searching Draft collection...');
+        final draftQuery = await _firestore
+            .collection('Draft')
+            .where('uid', isEqualTo: uid)
+            .limit(1)
+            .get();
+
+        if (draftQuery.docs.isNotEmpty) {
+          documentId = draftQuery.docs.first.id;
+          collectionName = 'Draft';
+          data = draftQuery.docs.first.data();
+          _logger.i('   ✅ Found in Draft, Doc ID: $documentId');
+        }
+      }
+
+      if (data == null) {
+        _logger.w('   ⚠️ Employee not found in either collection for UID: $uid');
         return {
-          'jobTitle': data['employmentDetails']?['jobTitle'] ?? 
-                     data['employmentInfo']?['jobTitle'] ?? '-',
-          'employmentType': data['employmentDetails']?['employmentType'] ?? 
-                          data['employmentInfo']?['employmentType'] ?? '-',
-          'status': data['status'] ?? 'submitted',
-          'hoursWorked': data['hoursWorked'] ?? {},
+          'jobTitle': '-',
+          'employmentType': '-',
+          'status': 'draft',
+          'hoursWorked': {},
         };
       }
 
-      // Try Draft collection
-      final draftQuery = await _firestore
-          .collection('Draft')
-          .where('uid', isEqualTo: uid)
-          .limit(1)
-          .get();
-
-      if (draftQuery.docs.isNotEmpty) {
-        final data = draftQuery.docs.first.data();
-        return {
-          'jobTitle': data['employmentDetails']?['jobTitle'] ?? 
-                     data['employmentInfo']?['jobTitle'] ?? '-',
-          'employmentType': data['employmentDetails']?['employmentType'] ?? 
-                          data['employmentInfo']?['employmentType'] ?? '-',
-          'status': data['status'] ?? 'draft',
-          'hoursWorked': data['hoursWorked'] ?? {},
-        };
+      // Extract hours worked with proper type handling
+      Map<String, dynamic> hoursWorked = {};
+      final hoursWorkedRaw = data['hoursWorked'];
+      
+      _logger.d('   📊 Hours Worked Raw Type: ${hoursWorkedRaw.runtimeType}');
+      _logger.d('   📊 Hours Worked Raw Value: $hoursWorkedRaw');
+      
+      if (hoursWorkedRaw != null) {
+        if (hoursWorkedRaw is Map<String, dynamic>) {
+          hoursWorked = hoursWorkedRaw;
+          _logger.d('   ✅ Hours worked is Map<String, dynamic>');
+        } else if (hoursWorkedRaw is Map) {
+          hoursWorked = Map<String, dynamic>.from(hoursWorkedRaw);
+          _logger.d('   🔄 Converted hours worked to Map<String, dynamic>');
+        }
       }
 
-      // Return defaults if not found
-      return {
-        'jobTitle': '-',
-        'employmentType': '-',
-        'status': 'draft',
-        'hoursWorked': {},
+      _logger.d('   📊 Final Hours Worked: $hoursWorked');
+      _logger.d('   📊 Hours Worked Keys: ${hoursWorked.keys.toList()}');
+
+      final details = {
+        'jobTitle': data['employmentDetails']?['jobTitle'] ?? 
+                  data['employmentInfo']?['jobTitle'] ?? '-',
+        'employmentType': data['employmentDetails']?['employmentType'] ?? 
+                        data['employmentInfo']?['employmentType'] ?? '-',
+        'status': data['status'] ?? (collectionName == 'Draft' ? 'draft' : 'submitted'),
+        'hoursWorked': hoursWorked,
+        'documentId': documentId,
+        'collectionName': collectionName,
       };
 
-    } catch (e) {
-      _logger.e('Error fetching employee details for UID: $uid', error: e);
+      _logger.i('   ✅ Employee details retrieved successfully');
+      _logger.d('   Details: $details');
+      return details;
+
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error fetching employee details for UID: $uid', error: e, stackTrace: stackTrace);
       return {
         'jobTitle': '-',
         'employmentType': '-',
@@ -1332,8 +1375,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     final monthKey = DateFormat('yyyy-MM').format(_selectedMonth);
     final hoursData = employeeData['hoursWorked'];
     
+    _logger.d('=== 📊 GETTING MONTHLY HOURS ===');
+    _logger.d('Employee: ${employeeData['fullName']}');
+    _logger.d('Month Key: $monthKey');
+    _logger.d('Hours Data Type: ${hoursData.runtimeType}');
+    _logger.d('Hours Data: $hoursData');
+    
     // Handle null or non-map hoursData
     if (hoursData == null) {
+      _logger.d('   ℹ️ Hours data is null, returning 0.0');
       return 0.0;
     }
     
@@ -1341,22 +1391,34 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     final Map<String, dynamic> hoursMap;
     if (hoursData is Map<String, dynamic>) {
       hoursMap = hoursData;
+      _logger.d('   ✅ Hours data is Map<String, dynamic>');
     } else if (hoursData is Map) {
       // Convert LinkedMap or other Map types to Map<String, dynamic>
       hoursMap = Map<String, dynamic>.from(hoursData);
+      _logger.d('   🔄 Converted Map to Map<String, dynamic>');
     } else {
+      _logger.w('   ⚠️ Hours data is not a Map (type: ${hoursData.runtimeType}), returning 0.0');
       return 0.0;
     }
     
+    _logger.d('   📋 Hours Map Keys: ${hoursMap.keys.toList()}');
+    
     if (!hoursMap.containsKey(monthKey)) {
+      _logger.d('   ℹ️ Month key "$monthKey" not found in hours map');
+      _logger.d('   Available months: ${hoursMap.keys.join(", ")}');
       return 0.0;
     }
     
     final value = hoursMap[monthKey];
+    _logger.d('   ✅ Found value for $monthKey: $value (type: ${value.runtimeType})');
+    
     if (value is num) {
-      return value.toDouble();
+      final hours = value.toDouble();
+      _logger.i('   ✅✅ Returning hours: $hours for ${employeeData['fullName']}');
+      return hours;
     }
     
+    _logger.w('   ⚠️ Value is not a number (type: ${value.runtimeType}), returning 0.0');
     return 0.0;
   }
 
@@ -1369,6 +1431,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   void _showSearchDialog() {
+    _logger.d('Opening search dialog');
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1435,6 +1499,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         if (employee.isNotEmpty) {
           final hoursWorked = _getMonthlyHours(employee);
           
+          _logger.d('Forwarding employee: ${employee['fullName']} - Hours: $hoursWorked');
+          
           employeeDataList.add({
             'employeeId': uid,
             'fullName': employee['fullName'] ?? 'Unknown',
@@ -1447,6 +1513,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           });
         }
       }
+
+      _logger.i('Forwarding ${employeeDataList.length} employees to HoursForwarded collection');
 
       await _firestore.collection('HoursForwarded').add({
         'supervisorId': _currentUser!.uid,
@@ -1503,7 +1571,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   void _showHoursEntryDialog(String uid, String employeeName, String department) {
-    _logger.i('Opening hours entry dialog for: $employeeName');
+    _logger.i('Opening hours entry dialog for: $employeeName (UID: $uid)');
     
     showDialog(
       context: context,
@@ -1516,6 +1584,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       if (saved == true) {
         _logger.i('Hours saved, refreshing dashboard');
         setState(() {});
+      } else {
+        _logger.d('Hours dialog closed without saving');
       }
     });
   }
