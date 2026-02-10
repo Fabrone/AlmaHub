@@ -5,8 +5,14 @@ import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-/// Hours Entry Dialog for Supervisors to log employee daily hours
-/// UPDATED: Properly handles same-day updates and multi-day accumulation
+/// Enhanced Hours Entry Dialog for Supervisors
+/// 
+/// NEW FEATURES:
+/// - Automatic meal break deduction
+/// - Employment-type specific standard hours
+/// - 12-hour daily overtime cap
+/// - Work output quality rating (affects performance)
+/// - Smart performance calculation combining hours + quality
 class HoursEntryDialog extends StatefulWidget {
   final String employeeId;
   final String employeeName;
@@ -38,16 +44,19 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _entryTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _exitTime = const TimeOfDay(hour: 17, minute: 0);
+  int _breakMinutes = 60; // Default 1 hour lunch break
+  double _workQuality = 80.0; // Default work quality rating (0-100%)
   bool _isSaving = false;
-  double _calculatedHours = 9.0;
+  double _calculatedHours = 8.0; // After break deduction
+  String _employmentType = 'Full-Time'; // Will be fetched
 
   @override
   void initState() {
     super.initState();
-    _logger.i('=== 🚀 HOURS ENTRY DIALOG INITIALIZED ===');
-    _logger.i('Employee ID (UID): ${widget.employeeId}');
-    _logger.i('Employee Name: ${widget.employeeName}');
+    _logger.i('=== 🚀 ENHANCED HOURS ENTRY DIALOG ===');
+    _logger.i('Employee: ${widget.employeeName} (${widget.employeeId})');
     _logger.i('Department: ${widget.department}');
+    _fetchEmploymentType();
     _syncOfflineData();
   }
 
@@ -57,6 +66,49 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
     _calculateHours();
   }
 
+  /// Fetch employee's employment type to set appropriate expectations
+  Future<void> _fetchEmploymentType() async {
+    try {
+      _logger.d('🔍 Fetching employment type...');
+      
+      // Try EmployeeDetails first
+      final employeeQuery = await _firestore
+          .collection('EmployeeDetails')
+          .where('uid', isEqualTo: widget.employeeId)
+          .limit(1)
+          .get();
+
+      Map<String, dynamic>? data;
+      
+      if (employeeQuery.docs.isNotEmpty) {
+        data = employeeQuery.docs.first.data();
+      } else {
+        // Try Draft
+        final draftQuery = await _firestore
+            .collection('Draft')
+            .where('uid', isEqualTo: widget.employeeId)
+            .limit(1)
+            .get();
+        
+        if (draftQuery.docs.isNotEmpty) {
+          data = draftQuery.docs.first.data();
+        }
+      }
+
+      if (data != null) {
+        setState(() {
+          _employmentType = data?['employmentDetails']?['employmentType'] ?? 
+                          data?['employmentInfo']?['employmentType'] ?? 
+                          'Full-Time';
+        });
+        _logger.i('   ✅ Employment Type: $_employmentType');
+      }
+    } catch (e) {
+      _logger.e('❌ Error fetching employment type', error: e);
+    }
+  }
+
+  /// Calculate hours with break deduction and overtime cap
   void _calculateHours() {
     final entry = DateTime(
       _selectedDate.year,
@@ -75,13 +127,28 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
     );
 
     final difference = exit.difference(entry);
+    final totalMinutes = difference.inMinutes;
+    
+    // Deduct break time
+    final workMinutes = totalMinutes - _breakMinutes;
+    final workHours = workMinutes / 60.0;
+    
+    // Cap at 12 hours per day (overtime limit)
+    final cappedHours = workHours.clamp(0.0, 12.0);
     
     if (mounted) {
       setState(() {
-        _calculatedHours = difference.inMinutes / 60.0;
+        _calculatedHours = cappedHours;
       });
 
-      _logger.d('📊 Calculated hours: $_calculatedHours for ${DateFormat('yyyy-MM-dd').format(_selectedDate)}');
+      _logger.d('⏱️ Time Calculation:');
+      _logger.d('   Entry → Exit: $totalMinutes minutes');
+      _logger.d('   Break: $_breakMinutes minutes');
+      _logger.d('   Work Time: $workMinutes minutes ($workHours hrs)');
+      if (workHours > 12.0) {
+        _logger.w('   ⚠️ CAPPED: $workHours hrs → 12.0 hrs (overtime limit)');
+      }
+      _logger.d('   Final Hours: $_calculatedHours hrs');
     }
   }
 
@@ -111,6 +178,8 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
             hours: entry['hours'],
             entryTime: entry['entryTime'],
             exitTime: entry['exitTime'],
+            breakMinutes: entry['breakMinutes'] ?? 60,
+            workQuality: entry['workQuality'] ?? 80.0,
           );
           successCount++;
           _logger.i('   ✅ Synced');
@@ -153,17 +222,19 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
     required double hours,
     required String entryTime,
     required String exitTime,
+    required int breakMinutes,
+    required double workQuality,
   }) async {
-    _logger.i('=== 💾 SAVING TO FIRESTORE ===');
+    _logger.i('=== 💾 SAVING ENHANCED HOURS DATA ===');
     _logger.i('Employee UID: $employeeId');
     
     final dateKey = DateFormat('yyyy-MM-dd').format(date);
     final monthKey = DateFormat('yyyy-MM').format(date);
     
-    _logger.d('📅 Date Key: $dateKey');
-    _logger.d('📅 Month Key: $monthKey');
-    _logger.d('⏰ Hours: $hours');
+    _logger.d('📅 Date: $dateKey, Month: $monthKey');
+    _logger.d('⏰ Hours: $hours (after $breakMinutes min break)');
     _logger.d('🕐 Entry: $entryTime → Exit: $exitTime');
+    _logger.d('⭐ Work Quality: $workQuality%');
 
     try {
       // STEP 1: Find employee document
@@ -172,8 +243,6 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
       
       _logger.i('🔍 STEP 1: Finding employee document...');
       
-      // Try EmployeeDetails first
-      _logger.d('   Searching EmployeeDetails...');
       final employeeQuery = await _firestore
           .collection('EmployeeDetails')
           .where('uid', isEqualTo: employeeId)
@@ -183,10 +252,8 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
       if (employeeQuery.docs.isNotEmpty) {
         documentId = employeeQuery.docs.first.id;
         collectionName = 'EmployeeDetails';
-        _logger.i('   ✅ Found in EmployeeDetails');
-        _logger.i('   📄 Doc ID: $documentId');
+        _logger.i('   ✅ Found in EmployeeDetails (Doc ID: $documentId)');
       } else {
-        _logger.d('   Searching Draft...');
         final draftQuery = await _firestore
             .collection('Draft')
             .where('uid', isEqualTo: employeeId)
@@ -196,19 +263,16 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
         if (draftQuery.docs.isNotEmpty) {
           documentId = draftQuery.docs.first.id;
           collectionName = 'Draft';
-          _logger.i('   ✅ Found in Draft');
-          _logger.i('   📄 Doc ID: $documentId');
+          _logger.i('   ✅ Found in Draft (Doc ID: $documentId)');
         }
       }
 
       if (documentId == null || collectionName == null) {
-        final errorMsg = 'Employee not found for UID: $employeeId';
-        _logger.e('❌ CRITICAL: $errorMsg');
-        throw Exception(errorMsg);
+        throw Exception('Employee not found for UID: $employeeId');
       }
 
-      // STEP 2: Check if this date already has an entry (same-day update)
-      _logger.i('🔍 STEP 2: Checking for existing entry on $dateKey...');
+      // STEP 2: Check for existing entry
+      _logger.i('🔍 STEP 2: Checking existing entry for $dateKey...');
       final existingEntryRef = _firestore
           .collection(collectionName)
           .doc(documentId)
@@ -217,44 +281,42 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
 
       final existingEntry = await existingEntryRef.get();
       if (existingEntry.exists) {
-        final existingHours = (existingEntry.data()?['hours'] ?? 0).toDouble();
-        _logger.i('   ⚠️ SAME-DAY UPDATE detected!');
-        _logger.i('   Old hours: $existingHours → New hours: $hours');
-        _logger.i('   This will REPLACE the old entry (not add to it)');
+        final oldHours = (existingEntry.data()?['hours'] ?? 0).toDouble();
+        final oldQuality = (existingEntry.data()?['workQuality'] ?? 0).toDouble();
+        _logger.i('   ⚠️ SAME-DAY UPDATE!');
+        _logger.i('   Old: $oldHours hrs, $oldQuality% quality');
+        _logger.i('   New: $hours hrs, $workQuality% quality');
       } else {
         _logger.i('   ✅ New entry for $dateKey');
       }
 
-      // STEP 3: Save/update daily entry
-      _logger.i('💾 STEP 3: Saving daily hours...');
-      _logger.d('   Path: $collectionName/$documentId/DailyHours/$dateKey');
+      // STEP 3: Save daily entry with enhanced data
+      _logger.i('💾 STEP 3: Saving enhanced daily hours...');
       
       await existingEntryRef.set({
         'date': Timestamp.fromDate(date),
         'entryTime': entryTime,
         'exitTime': exitTime,
         'hours': hours,
+        'breakMinutes': breakMinutes,
+        'workQuality': workQuality, // NEW: Work output quality rating
         'monthKey': monthKey,
         'loggedBy': widget.department,
         'loggedAt': FieldValue.serverTimestamp(),
         'uid': employeeId,
-      }, SetOptions(merge: false)); // merge: false = complete replacement
+      }, SetOptions(merge: false));
 
-      _logger.i('   ✅ Daily hours saved');
+      _logger.i('   ✅ Daily hours saved with quality rating');
 
-      // Verify save
+      // Verify
       final verify = await existingEntryRef.get();
       if (verify.exists) {
         final savedHours = (verify.data()?['hours'] ?? 0).toDouble();
-        _logger.i('   ✅ Verified: $savedHours hrs saved');
-        if (savedHours != hours) {
-          _logger.e('   ❌ MISMATCH! Expected $hours, got $savedHours');
-        }
-      } else {
-        _logger.e('   ❌ WARNING: Document not saved!');
+        final savedQuality = (verify.data()?['workQuality'] ?? 0).toDouble();
+        _logger.i('   ✅ Verified: $savedHours hrs, $savedQuality% quality');
       }
 
-      // STEP 4: Recalculate monthly total from ALL daily entries
+      // STEP 4: Update monthly totals
       await _updateMonthlyTotal(employeeId, documentId, collectionName, monthKey);
       
     } catch (e, stackTrace) {
@@ -270,13 +332,11 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
     String monthKey,
   ) async {
     try {
-      _logger.i('🔄 STEP 4: Updating monthly total...');
-      _logger.d('   Collection: $collectionName');
-      _logger.d('   Doc ID: $documentId');
+      _logger.i('🔄 STEP 4: Calculating monthly totals...');
+      _logger.d('   Collection: $collectionName, Doc: $documentId');
       _logger.d('   Month: $monthKey');
 
-      // Get ALL daily entries for this month
-      _logger.d('   Fetching all daily entries for $monthKey...');
+      // Get all daily entries for the month
       final dailyEntries = await _firestore
           .collection(collectionName)
           .doc(documentId)
@@ -287,65 +347,72 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
       _logger.i('   📊 Found ${dailyEntries.docs.length} daily entries');
 
       if (dailyEntries.docs.isEmpty) {
-        _logger.w('   ⚠️ No daily entries found! This should not happen.');
+        _logger.w('   ⚠️ No daily entries!');
         return;
       }
 
-      // Calculate total by summing ALL days
+      // Calculate totals
       double totalHours = 0;
+      double totalQualityWeighted = 0;
+      int daysWorked = 0;
+
       for (var doc in dailyEntries.docs) {
-        final dayHours = (doc.data()['hours'] ?? 0).toDouble();
+        final data = doc.data();
+        final dayHours = (data['hours'] ?? 0).toDouble();
+        final quality = (data['workQuality'] ?? 80.0).toDouble();
+        
         totalHours += dayHours;
-        _logger.d('      ${doc.id}: $dayHours hrs');
+        totalQualityWeighted += (dayHours * quality); // Weight quality by hours
+        daysWorked++;
+        
+        _logger.d('      ${doc.id}: $dayHours hrs @ $quality% quality');
       }
 
-      _logger.i('   📈 TOTAL for $monthKey: $totalHours hrs');
+      // Calculate average work quality (weighted by hours)
+      final avgWorkQuality = totalHours > 0 
+          ? (totalQualityWeighted / totalHours) 
+          : 80.0;
 
-      // Get current document state
+      _logger.i('   📈 MONTHLY TOTALS:');
+      _logger.i('      Total Hours: $totalHours hrs');
+      _logger.i('      Days Worked: $daysWorked days');
+      _logger.i('      Avg Work Quality: ${avgWorkQuality.toStringAsFixed(1)}%');
+
+      // Update main document
       final docRef = _firestore
           .collection(collectionName)
           .doc(documentId);
 
-      final currentDoc = await docRef.get();
-      if (currentDoc.exists) {
-        final existingHoursWorked = currentDoc.data()?['hoursWorked'];
-        _logger.d('   📋 Current hoursWorked: $existingHoursWorked');
-      }
-
-      // Update the main document with the calculated total
-      _logger.i('   💾 Updating main document...');
-      
       await docRef.set({
         'hoursWorked': {
           monthKey: totalHours,
+        },
+        'workQuality': {
+          monthKey: avgWorkQuality,
+        },
+        'daysWorked': {
+          monthKey: daysWorked,
         },
         'lastHoursUpdate': FieldValue.serverTimestamp(),
         'uid': employeeUid,
       }, SetOptions(merge: true));
 
-      _logger.i('   ✅ Monthly total updated');
+      _logger.i('   ✅ Monthly totals updated');
 
-      // Verify the update
-      final verifyDoc = await docRef.get();
-      if (verifyDoc.exists) {
-        final hoursWorked = verifyDoc.data()?['hoursWorked'];
+      // Verify
+      final verify = await docRef.get();
+      if (verify.exists) {
+        final hoursWorked = verify.data()?['hoursWorked'];
+        final quality = verify.data()?['workQuality'];
         _logger.i('   ✅ VERIFICATION:');
-        _logger.i('      hoursWorked field: $hoursWorked');
+        _logger.i('      hoursWorked: $hoursWorked');
+        _logger.i('      workQuality: $quality');
         
-        if (hoursWorked != null && hoursWorked is Map) {
-          final savedTotal = hoursWorked[monthKey];
-          _logger.i('      $monthKey value: $savedTotal');
-          
-          if (savedTotal == totalHours) {
-            _logger.i('   ✅✅✅ SUCCESS: Total matches! ($totalHours hrs)');
-          } else {
-            _logger.e('   ❌ ERROR: Mismatch! Expected $totalHours, got $savedTotal');
-          }
+        if (hoursWorked is Map && hoursWorked[monthKey] == totalHours) {
+          _logger.i('   ✅✅✅ SUCCESS: Data matches!');
         } else {
-          _logger.e('   ❌ ERROR: hoursWorked is not a Map!');
+          _logger.e('   ❌ ERROR: Data mismatch!');
         }
-      } else {
-        _logger.e('   ❌ ERROR: Document doesn\'t exist after update!');
       }
 
     } catch (e, stackTrace) {
@@ -356,22 +423,15 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
 
   Future<void> _saveHours() async {
     if (_calculatedHours <= 0) {
-      _logger.w('⚠️ Invalid hours: $_calculatedHours');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Invalid hours. Exit time must be after entry time.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showError('Invalid hours. Exit time must be after entry time + break.');
       return;
     }
 
-    _logger.i('=== 🚀 SAVE HOURS INITIATED ===');
-    _logger.i('Employee: ${widget.employeeName} (${widget.employeeId})');
+    _logger.i('=== 🚀 SAVE ENHANCED HOURS ===');
+    _logger.i('Employee: ${widget.employeeName}');
     _logger.i('Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}');
-    _logger.i('Hours: $_calculatedHours');
+    _logger.i('Hours: $_calculatedHours (Break: $_breakMinutes min)');
+    _logger.i('Work Quality: $_workQuality%');
 
     setState(() => _isSaving = true);
 
@@ -380,11 +440,6 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
       final entryTimeStr = '${_entryTime.hour.toString().padLeft(2, '0')}:${_entryTime.minute.toString().padLeft(2, '0')}';
       final exitTimeStr = '${_exitTime.hour.toString().padLeft(2, '0')}:${_exitTime.minute.toString().padLeft(2, '0')}';
 
-      _logger.d('📅 Date: $dateKey');
-      _logger.d('🕐 Entry: $entryTimeStr → Exit: $exitTimeStr');
-
-      // Check connectivity
-      _logger.i('🌐 Checking connectivity...');
       final isOnline = await _checkFirestoreConnectivity();
       
       if (isOnline) {
@@ -397,9 +452,11 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
             hours: _calculatedHours,
             entryTime: entryTimeStr,
             exitTime: exitTimeStr,
+            breakMinutes: _breakMinutes,
+            workQuality: _workQuality,
           );
 
-          _logger.i('✅✅✅ SUCCESS: Hours saved!');
+          _logger.i('✅✅✅ SUCCESS!');
 
           if (!mounted) return;
 
@@ -408,7 +465,7 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
             SnackBar(
               content: Text(
                 '✅ Hours logged successfully!\n'
-                '${widget.employeeName}: $_calculatedHours hrs\n'
+                '${widget.employeeName}: $_calculatedHours hrs @ $_workQuality% quality\n'
                 '${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
               ),
               backgroundColor: Colors.green,
@@ -416,64 +473,26 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
             ),
           );
         } catch (firestoreError) {
-          _logger.e('❌ Firestore error (caching offline)', error: firestoreError);
-          
+          _logger.e('❌ Firestore error - caching offline', error: firestoreError);
           await _cacheOffline(dateKey, entryTimeStr, exitTimeStr);
 
           if (!mounted) return;
-
           Navigator.pop(context, true);
           
-          // Get a shorter error message
-          String errorMsg = firestoreError.toString();
-          if (errorMsg.length > 100) {
-            errorMsg = '${errorMsg.substring(0, 97)}...';
-          }
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '⚠️ Save error: $errorMsg\n'
-                'Hours cached offline, will sync later.',
-              ),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+          _showWarning('Save error. Hours cached offline and will sync later.');
         }
       } else {
-        _logger.w('📴 OFFLINE - Caching locally');
+        _logger.w('📴 OFFLINE - Caching');
         await _cacheOffline(dateKey, entryTimeStr, exitTimeStr);
 
         if (!mounted) return;
-
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📴 Offline: Hours cached, will sync when online'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 4),
-          ),
-        );
+        _showWarning('Offline: Hours cached, will sync when online');
       }
     } catch (e, stackTrace) {
       _logger.e('❌ CRITICAL ERROR', error: e, stackTrace: stackTrace);
-
       if (!mounted) return;
-
-      // Handle the error message safely
-      String errorMsg = e.toString();
-      if (errorMsg.length > 150) {
-        errorMsg = '${errorMsg.substring(0, 147)}...';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error: $errorMsg'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      _showError('Critical error: ${e.toString()}');
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -490,7 +509,6 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
       final existingData = prefs.getString('pending_hours_entries');
       if (existingData != null) {
         cachedEntries = jsonDecode(existingData);
-        _logger.d('   Existing: ${cachedEntries.length}');
       }
 
       cachedEntries.add({
@@ -499,6 +517,8 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
         'hours': _calculatedHours,
         'entryTime': entryTime,
         'exitTime': exitTime,
+        'breakMinutes': _breakMinutes,
+        'workQuality': _workQuality,
         'cachedAt': DateTime.now().toIso8601String(),
       });
 
@@ -509,192 +529,112 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
     }
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('❌ $message'), backgroundColor: Colors.red),
+    );
+  }
+
+  void _showWarning(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('⚠️ $message'), backgroundColor: Colors.orange),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: 500,
+        width: 550,
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.access_time,
-                    color: Color.fromARGB(255, 46, 125, 50),
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Log Work Hours',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.employeeName,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    _logger.d('❌ Dialog closed');
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 24),
-
-            _buildDateSelector(),
-            const SizedBox(height: 20),
-
-            Row(
-              children: [
-                Expanded(child: _buildTimeSelector('Entry Time', _entryTime, true)),
-                const SizedBox(width: 16),
-                Expanded(child: _buildTimeSelector('Exit Time', _exitTime, false)),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 24),
+              _buildDateSelector(),
+              const SizedBox(height: 20),
+              Row(
                 children: [
-                  const Text(
-                    'Total Hours:',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '${_calculatedHours.toStringAsFixed(2)} hrs',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color.fromARGB(255, 46, 125, 50),
-                    ),
-                  ),
+                  Expanded(child: _buildTimeSelector('Entry Time', _entryTime, true)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildTimeSelector('Exit Time', _exitTime, false)),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _isSaving ? null : () {
-                      _logger.d('🚫 Cancelled');
-                      Navigator.pop(context);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _saveHours,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 46, 125, 50),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            'Save Hours',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+              const SizedBox(height: 20),
+              _buildBreakSelector(),
+              const SizedBox(height: 20),
+              _buildWorkQualitySlider(),
+              const SizedBox(height: 24),
+              _buildHoursSummary(),
+              const SizedBox(height: 24),
+              _buildActionButtons(),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.access_time,
+            color: Color.fromARGB(255, 46, 125, 50),
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Log Work Hours',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.employeeName,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
+              Text(
+                _employmentType,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
     );
   }
 
   Widget _buildDateSelector() {
     return InkWell(
       onTap: () async {
-        _logger.d('📅 Opening date picker...');
         final picked = await showDatePicker(
           context: context,
           initialDate: _selectedDate,
           firstDate: DateTime.now().subtract(const Duration(days: 90)),
           lastDate: DateTime.now(),
-          builder: (context, child) {
-            return Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: const ColorScheme.light(
-                  primary: Color.fromARGB(255, 46, 125, 50),
-                ),
-              ),
-              child: child!,
-            );
-          },
         );
-
         if (picked != null) {
-          _logger.i('📅 Date: ${DateFormat('yyyy-MM-dd').format(picked)}');
           setState(() {
             _selectedDate = picked;
             _calculateHours();
@@ -709,29 +649,17 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.calendar_today,
-              color: Color.fromARGB(255, 46, 125, 50),
-            ),
+            const Icon(Icons.calendar_today, color: Color.fromARGB(255, 46, 125, 50)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Work Date',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
+                  Text('Work Date', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                   const SizedBox(height: 4),
                   Text(
                     DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -746,23 +674,8 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
   Widget _buildTimeSelector(String label, TimeOfDay time, bool isEntry) {
     return InkWell(
       onTap: () async {
-        final picked = await showTimePicker(
-          context: context,
-          initialTime: time,
-          builder: (context, child) {
-            return Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: const ColorScheme.light(
-                  primary: Color.fromARGB(255, 46, 125, 50),
-                ),
-              ),
-              child: child!,
-            );
-          },
-        );
-
+        final picked = await showTimePicker(context: context, initialTime: time);
         if (picked != null) {
-          _logger.i('🕐 $label: ${picked.format(context)}');
           setState(() {
             if (isEntry) {
               _entryTime = picked;
@@ -782,34 +695,259 @@ class _HoursEntryDialogState extends State<HoursEntryDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
-            ),
+            Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   time.format(context),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                const Icon(
-                  Icons.access_time,
-                  color: Color.fromARGB(255, 46, 125, 50),
-                  size: 20,
-                ),
+                const Icon(Icons.access_time, color: Color.fromARGB(255, 46, 125, 50), size: 20),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBreakSelector() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        border: Border.all(color: Colors.orange.shade200),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.restaurant, color: Colors.orange, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Meal Break',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildBreakOption(30, '30 min'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildBreakOption(60, '1 hour'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildBreakOption(90, '1.5 hours'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreakOption(int minutes, String label) {
+    final isSelected = _breakMinutes == minutes;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _breakMinutes = minutes;
+          _calculateHours();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.orange : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? Colors.orange : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey.shade700,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkQualitySlider() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        border: Border.all(color: Colors.blue.shade200),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.star, color: Colors.blue, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Work Output Quality',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getQualityColor(_workQuality),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_workQuality.toInt()}%',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Slider(
+            value: _workQuality,
+            min: 0,
+            max: 100,
+            divisions: 20,
+            activeColor: _getQualityColor(_workQuality),
+            label: _getQualityLabel(_workQuality),
+            onChanged: (value) {
+              setState(() => _workQuality = value);
+            },
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Poor', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+              Text('Excellent', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getQualityColor(double quality) {
+    if (quality >= 90) return Colors.green;
+    if (quality >= 70) return Colors.blue;
+    if (quality >= 50) return Colors.orange;
+    return Colors.red;
+  }
+
+  String _getQualityLabel(double quality) {
+    if (quality >= 90) return 'Excellent';
+    if (quality >= 70) return 'Good';
+    if (quality >= 50) return 'Fair';
+    return 'Poor';
+  }
+
+  Widget _buildHoursSummary() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color.fromARGB(255, 46, 125, 50).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total Hours:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(
+                '${_calculatedHours.toStringAsFixed(2)} hrs',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color.fromARGB(255, 46, 125, 50),
+                ),
+              ),
+            ],
+          ),
+          if (_calculatedHours >= 12.0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Maximum 12 hours/day cap applied (overtime limit)',
+                      style: TextStyle(fontSize: 11, color: Colors.orange.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _isSaving ? null : () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Cancel'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _isSaving ? null : _saveHours,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 46, 125, 50),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Save Hours', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
     );
   }
 }
