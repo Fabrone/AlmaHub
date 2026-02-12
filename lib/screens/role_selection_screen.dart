@@ -501,7 +501,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                 title: 'Supervisor',
                                 description: 'Monitor teams',
                                 color: const Color.fromARGB(255, 46, 125, 50),
-                                badge: 'Coming Soon',
+                                //badge: 'Coming Soon',`
                                 onTap: () {
                                   Navigator.push(
                                     context,
@@ -520,7 +520,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                                 title: 'Accountant',
                                 description: 'Manage payroll',
                                 color: const Color.fromARGB(255, 230, 81, 0),
-                                badge: 'Coming Soon',
+                                //badge: 'Coming Soon',
                                 onTap: () {
                                   Navigator.push(
                                     context,

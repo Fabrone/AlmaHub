@@ -508,18 +508,18 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         // Calculate total hours and overtime for selected month
         double totalHours = 0;
         double totalOvertime = 0;
-        //int employeesWithHours = 0;
         int employeesWithOvertime = 0;
         
         for (var employee in employees) {
           final monthlyData = _getMonthlyData(employee);
           final hoursWorked = monthlyData['hours'] as double;
+          final daysWorked = monthlyData['daysWorked'] as int;
+          
           if (hoursWorked > 0) {
             totalHours += hoursWorked;
             
-            // Calculate overtime
-            final employmentType = employee['employmentType'] ?? 'Full-Time';
-            final overtime = _calculateOvertimeHours(hoursWorked, employmentType);
+            // Calculate daily overtime and sum it up
+            final overtime = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
             if (overtime > 0) {
               totalOvertime += overtime;
               employeesWithOvertime++;
@@ -824,8 +824,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                         final workQuality = monthlyData['quality'] as double;
                         final daysWorked = monthlyData['daysWorked'] as int;
                         
-                        // Calculate overtime
-                        final overtimeHours = _calculateOvertimeHours(hoursWorked, employmentType);
+                        // Calculate overtime using DAILY logic
+                        final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
                         
                         // Calculate dual performance metrics
                         final performanceMetrics = _calculateDualPerformance(
@@ -1589,6 +1589,70 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     return value is num ? value.toDouble() : 0.0;
   }
 
+  /// ============================================================================
+  /// NEW DAILY-BASED OVERTIME CALCULATION
+  /// ============================================================================
+  /// 
+  /// DAILY OVERTIME LOGIC (as per your requirements):
+  /// - Standard working hours: 8 hours/day (after 1-hour meal break)
+  /// - Maximum total hours (including overtime): 12 hours/day
+  /// - Overtime calculation:
+  ///   * If hours ≤ 8: No overtime (display "No OT")
+  ///   * If 8 < hours ≤ 12: Overtime = hours - 8
+  ///   * If hours > 12: Overtime capped at 4 hours (12 - 8)
+  /// 
+  /// Example: Employee works 10 hours → Overtime = 10 - 8 = 2 hours
+  /// ============================================================================
+  
+  double _calculateMonthlyOvertimeFromDailyHours(double totalMonthlyHours, int daysWorked) {
+    _logger.d('=== 🕐 CALCULATING MONTHLY OVERTIME FROM DAILY HOURS ===');
+    _logger.d('Total Monthly Hours: $totalMonthlyHours hrs');
+    _logger.d('Days Worked: $daysWorked days');
+    
+    if (totalMonthlyHours <= 0 || daysWorked <= 0) {
+      _logger.d('   ❌ No hours or no days worked - No overtime');
+      return 0.0;
+    }
+    
+    // Calculate average hours per day
+    final avgHoursPerDay = totalMonthlyHours / daysWorked;
+    _logger.d('Average Hours/Day: ${avgHoursPerDay.toStringAsFixed(2)} hrs');
+    
+    // DAILY OVERTIME LOGIC:
+    // Standard: 8 hours/day
+    // Maximum: 12 hours/day
+    const standardHoursPerDay = 8.0;
+    const maxHoursPerDay = 12.0;
+    const maxOvertimePerDay = maxHoursPerDay - standardHoursPerDay; // 4 hours
+    
+    double overtimePerDay = 0.0;
+    
+    if (avgHoursPerDay <= standardHoursPerDay) {
+      // No overtime if average is 8 hours or less
+      overtimePerDay = 0.0;
+      _logger.d('   ✅ Average ≤ 8 hrs/day → No Overtime');
+    } else if (avgHoursPerDay <= maxHoursPerDay) {
+      // Overtime is the excess over 8 hours
+      overtimePerDay = avgHoursPerDay - standardHoursPerDay;
+      _logger.d('   ✅ Average between 8-12 hrs/day → OT = ${overtimePerDay.toStringAsFixed(2)} hrs/day');
+    } else {
+      // Cap overtime at 4 hours per day (if someone logs > 12 hours)
+      overtimePerDay = maxOvertimePerDay;
+      _logger.d('   ⚠️ Average > 12 hrs/day → OT capped at $maxOvertimePerDay hrs/day');
+    }
+    
+    // Calculate total monthly overtime
+    final totalMonthlyOvertime = overtimePerDay * daysWorked;
+    
+    _logger.d('═══════════════════════════════════════');
+    _logger.d('Overtime/Day: ${overtimePerDay.toStringAsFixed(2)} hrs');
+    _logger.d('Days Worked: $daysWorked days');
+    _logger.d('Total Monthly Overtime: ${totalMonthlyOvertime.toStringAsFixed(2)} hrs');
+    _logger.d('═══════════════════════════════════════');
+    
+    return totalMonthlyOvertime;
+  }
+
   /// UPDATED EMPLOYMENT TYPES WITH 8-HOUR WORKDAY:
   /// - Full-Time/Permanent: 8 hrs/day × 5 days/week × 4.33 weeks = 173.2 hours/month
   /// - Contract: 8 hrs/day × 5 days/week × 4.33 weeks = 173.2 hours/month
@@ -1641,43 +1705,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     return monthlyStandard;
   }
 
-  double _calculateOvertimeHours(double totalHours, String employmentType) {
-    final standardHours = _getStandardHoursForEmploymentType(employmentType);
-    
-    // Overtime is any hours beyond standard
-    final overtime = (totalHours - standardHours).clamp(0.0, double.infinity);
-    
-    // Maximum possible overtime (12 hrs/day × 5 days/week × 4.33 weeks - standard)
-    final maxOvertimePerMonth = (12.0 * 5 * 4.33) - standardHours;
-    
-    // Cap overtime at maximum possible
-    final cappedOvertime = overtime.clamp(0.0, maxOvertimePerMonth);
-    
-    _logger.d('⏰ Overtime Calculation:');
-    _logger.d('   Total Hours: $totalHours hrs');
-    _logger.d('   Standard: $standardHours hrs');
-    _logger.d('   Raw Overtime: $overtime hrs');
-    _logger.d('   Max Overtime Possible: $maxOvertimePerMonth hrs');
-    _logger.d('   Capped Overtime: $cappedOvertime hrs');
-    
-    return cappedOvertime;
-  }
-
-  /// Calculate DUAL performance metrics with REALISTIC monthly calculations:
-  /// 
-  /// MONTHLY HOURS CALCULATION (30-day month):
-  /// - Standard working days per month: 22 days (5 days/week × 4.4 weeks)
-  /// - Standard hours: 8 hrs/day × 22 days = 176 hours/month
-  /// - Maximum hours (with overtime): 12 hrs/day × 22 days = 264 hours/month
-  /// 
-  /// PERFORMANCE CALCULATION:
-  /// - Hours Performance (70%): Based on hours worked vs standard/max hours
-  ///   * 0-176 hrs = 0-100% (underperforming to meeting standard)
-  ///   * 176-264 hrs = 100-150% (standard to maximum with overtime)
-  /// - Quality Performance (30%): Work quality percentage (0-100%)
-  /// - Total = (Hours% × 0.7) + (Quality% × 0.3)
-  /// 
-  /// This allows employees doing quality overtime to exceed 100% performance!
+  /// Calculate DUAL performance metrics with REALISTIC monthly calculations
   Map<String, dynamic> _calculateDualPerformance({
     required double hoursWorked,
     required double workQuality,
@@ -1899,8 +1927,10 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         if (employee.isNotEmpty) {
           final monthlyData = _getMonthlyData(employee);
           final hoursWorked = monthlyData['hours'] as double;
-          final employmentType = employee['employmentType'] ?? 'Full-Time';
-          final overtimeHours = _calculateOvertimeHours(hoursWorked, employmentType);
+          final daysWorked = monthlyData['daysWorked'] as int;
+          
+          // Use the new daily-based overtime calculation
+          final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
           
           _logger.d('Forwarding employee: ${employee['fullName']} - Hours: $hoursWorked, OT: $overtimeHours');
           
@@ -1910,9 +1940,10 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             'email': employee['email'] ?? 'Unknown',
             'department': employee['department'] ?? 'Unknown',
             'jobTitle': employee['jobTitle'] ?? 'Unknown',
-            'employmentType': employmentType,
+            'employmentType': employee['employmentType'] ?? 'Full-Time',
             'hoursWorked': hoursWorked,
             'overtimeHours': overtimeHours,
+            'daysWorked': daysWorked,
             'month': DateFormat('yyyy-MM').format(_selectedMonth),
             'monthDisplay': DateFormat('MMMM yyyy').format(_selectedMonth),
           });
