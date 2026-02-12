@@ -30,6 +30,12 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   final Set<String> _selectedEmployees = {};
   bool _isForwarding = false;
 
+  // ============================================================================
+  // ANTI-FLICKERING MECHANISM: Cache previous data to maintain display stability
+  // ============================================================================
+  List<Map<String, dynamic>> _cachedEmployees = [];
+  bool _hasInitialData = false;
+
   // Logger for debugging
   final Logger _logger = Logger(
     printer: PrettyPrinter(
@@ -207,7 +213,9 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           icon: const Icon(Icons.refresh, color: Colors.white),
           onPressed: () {
             _logger.i('Refreshing dashboard');
-            setState(() {});
+            setState(() {
+              // Keep cached data during refresh to prevent flickering
+            });
           },
           tooltip: 'Refresh',
         ),
@@ -472,6 +480,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                   setState(() {
                     _selectedMonth = month;
                     _selectedEmployees.clear();
+                    // Clear cache when month changes to force fresh data
+                    _hasInitialData = false;
                   });
                   Navigator.pop(context);
                 },
@@ -495,14 +505,30 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _getEmployeesDataStream(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.hasError) {
+        // ============================================================================
+        // ANTI-FLICKERING: Use cached data while loading new data
+        // ============================================================================
+        List<Map<String, dynamic>> employees;
+        
+        if (snapshot.hasData) {
+          employees = snapshot.data!;
+          // Update cache only when we have valid data
+          if (employees.isNotEmpty) {
+            _cachedEmployees = List.from(employees);
+            _hasInitialData = true;
+          }
+        } else if (_hasInitialData && _cachedEmployees.isNotEmpty) {
+          // Use cached data while waiting for new data
+          employees = _cachedEmployees;
+          _logger.d('📦 Using cached data for stats (${_cachedEmployees.length} employees)');
+        } else {
+          // No data available at all
           if (snapshot.hasError) {
             _logger.e('Error in stats stream', error: snapshot.error);
           }
           return const SizedBox.shrink();
         }
 
-        final employees = snapshot.data!;
         final totalEmployees = employees.length;
         
         // Calculate total hours and overtime for selected month
@@ -700,25 +726,48 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _getEmployeesDataStream(),
                 builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    _logger.e('Error in employee stream', error: snapshot.error);
-                    return Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Text('Error: ${snapshot.error}'),
-                    );
+                  // ============================================================================
+                  // ANTI-FLICKERING: Use cached data during updates
+                  // ============================================================================
+                  List<Map<String, dynamic>> allEmployees;
+                  bool isLoadingNewData = false;
+                  
+                  if (snapshot.hasData) {
+                    allEmployees = snapshot.data!;
+                    // Update cache when we get new data
+                    if (allEmployees.isNotEmpty) {
+                      _cachedEmployees = List.from(allEmployees);
+                      _hasInitialData = true;
+                    }
+                  } else if (_hasInitialData && _cachedEmployees.isNotEmpty) {
+                    // Use cached data while waiting for updates
+                    allEmployees = _cachedEmployees;
+                    isLoadingNewData = snapshot.connectionState == ConnectionState.waiting;
+                    _logger.d('📦 Using cached data for table (${_cachedEmployees.length} employees)');
+                  } else {
+                    // First time loading - show progress indicator
+                    if (snapshot.hasError) {
+                      _logger.e('Error in employee stream', error: snapshot.error);
+                      return Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text('Error: ${snapshot.error}'),
+                      );
+                    }
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.all(40),
+                        child: CircularProgressIndicator(
+                          color: Color.fromARGB(255, 123, 31, 162),
+                        ),
+                      );
+                    }
+
+                    // No data available
+                    allEmployees = [];
                   }
 
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(
-                        color: Color.fromARGB(255, 123, 31, 162),
-                      ),
-                    );
-                  }
-
-                  final allEmployees = snapshot.data ?? [];
-                  _logger.i('Loaded ${allEmployees.length} employees');
+                  _logger.i('Displaying ${allEmployees.length} employees${isLoadingNewData ? " (updating...)" : ""}');
 
                   // Apply search filter
                   final employees = _searchQuery.isEmpty
@@ -772,184 +821,232 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                     );
                   }
 
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowHeight: 50,
-                      dataRowMinHeight: 52,
-                      dataRowMaxHeight: 52,
-                      showCheckboxColumn: true,
-                      headingRowColor: WidgetStateProperty.all(
-                        Colors.grey.shade100,
-                      ),
-                      columnSpacing: 24,
-                      headingTextStyle: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Color.fromARGB(255, 123, 31, 162),
-                      ),
-                      dataTextStyle: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                      ),
-                      columns: [
-                        const DataColumn(label: Text('No.')),
-                        const DataColumn(label: Text('Full Name')),
-                        const DataColumn(label: Text('Email')),
-                        const DataColumn(label: Text('Job Title')),
-                        if (_shouldShowAllDepartments())
-                          const DataColumn(label: Text('Department')),
-                        const DataColumn(label: Text('Employment Type')),
-                        const DataColumn(label: Text('Hours Worked')),
-                        const DataColumn(label: Text('Overtime')),
-                        const DataColumn(label: Text('Performance')),
-                        const DataColumn(label: Text('Status')),
-                        const DataColumn(label: Text('Actions')),
-                      ],
-                      rows: employees.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final employee = entry.value;
-                        
-                        final uid = employee['uid'] ?? '';
-                        final fullName = employee['fullName'] ?? '-';
-                        final email = employee['email'] ?? '-';
-                        final jobTitle = employee['jobTitle'] ?? '-';
-                        final department = employee['department'] ?? '-';
-                        final employmentType = employee['employmentType'] ?? '-';
-                        final status = employee['status'] ?? 'draft';
-                        
-                        // Get monthly data (hours, quality, days)
-                        final monthlyData = _getMonthlyData(employee);
-                        final hoursWorked = monthlyData['hours'] as double;
-                        final workQuality = monthlyData['quality'] as double;
-                        final daysWorked = monthlyData['daysWorked'] as int;
-                        
-                        // Calculate overtime using DAILY logic
-                        final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
-                        
-                        // Calculate dual performance metrics
-                        final performanceMetrics = _calculateDualPerformance(
-                          hoursWorked: hoursWorked,
-                          workQuality: workQuality,
-                          employmentType: employmentType,
-                          daysWorked: daysWorked,
-                        );
-
-                        final isSelected = _selectedEmployees.contains(uid);
-
-                        _logger.d('Row $index: $fullName - Hours: $hoursWorked, OT: $overtimeHours, Days: $daysWorked');
-
-                        return DataRow(
-                          selected: isSelected,
-                          onSelectChanged: (selected) {
-                            setState(() {
-                              if (selected == true) {
-                                _selectedEmployees.add(uid);
-                              } else {
-                                _selectedEmployees.remove(uid);
-                              }
-                            });
-                            _logger.d('Employee ${selected == true ? "selected" : "deselected"}: $fullName');
-                          },
-                          cells: [
-                            DataCell(Text('${index + 1}')),
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  fullName,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 180,
-                                child: Text(
-                                  email,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 140,
-                                child: Text(
-                                  jobTitle,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
+                  // ============================================================================
+                  // SMOOTH TRANSITION: Wrap table in Stack for overlay loading indicator
+                  // ============================================================================
+                  return Stack(
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          key: ValueKey('table_${employees.length}_${_selectedMonth.month}'),
+                          headingRowHeight: 50,
+                          dataRowMinHeight: 52,
+                          dataRowMaxHeight: 52,
+                          showCheckboxColumn: true,
+                          headingRowColor: WidgetStateProperty.all(
+                            Colors.grey.shade100,
+                          ),
+                          columnSpacing: 24,
+                          headingTextStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Color.fromARGB(255, 123, 31, 162),
+                          ),
+                          dataTextStyle: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                          columns: [
+                            const DataColumn(label: Text('No.')),
+                            const DataColumn(label: Text('Full Name')),
+                            const DataColumn(label: Text('Email')),
+                            const DataColumn(label: Text('Job Title')),
                             if (_shouldShowAllDepartments())
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    department,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      color: Color.fromARGB(255, 123, 31, 162),
+                              const DataColumn(label: Text('Department')),
+                            const DataColumn(label: Text('Employment Type')),
+                            const DataColumn(label: Text('Hours Worked')),
+                            const DataColumn(label: Text('Overtime')),
+                            const DataColumn(label: Text('Performance')),
+                            const DataColumn(label: Text('Status')),
+                            const DataColumn(label: Text('Actions')),
+                          ],
+                          rows: employees.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final employee = entry.value;
+                            
+                            final uid = employee['uid'] ?? '';
+                            final fullName = employee['fullName'] ?? '-';
+                            final email = employee['email'] ?? '-';
+                            final jobTitle = employee['jobTitle'] ?? '-';
+                            final department = employee['department'] ?? '-';
+                            final employmentType = employee['employmentType'] ?? '-';
+                            final status = employee['status'] ?? 'draft';
+                            
+                            // Get monthly data (hours, quality, days)
+                            final monthlyData = _getMonthlyData(employee);
+                            final hoursWorked = monthlyData['hours'] as double;
+                            final workQuality = monthlyData['quality'] as double;
+                            final daysWorked = monthlyData['daysWorked'] as int;
+                            
+                            // Calculate overtime using DAILY logic
+                            final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
+                            
+                            // Calculate dual performance metrics
+                            final performanceMetrics = _calculateDualPerformance(
+                              hoursWorked: hoursWorked,
+                              workQuality: workQuality,
+                              employmentType: employmentType,
+                              daysWorked: daysWorked,
+                            );
+
+                            final isSelected = _selectedEmployees.contains(uid);
+
+                            return DataRow(
+                              key: ValueKey(uid), // Stable key for smooth updates
+                              selected: isSelected,
+                              onSelectChanged: (selected) {
+                                setState(() {
+                                  if (selected == true) {
+                                    _selectedEmployees.add(uid);
+                                  } else {
+                                    _selectedEmployees.remove(uid);
+                                  }
+                                });
+                                _logger.d('Employee ${selected == true ? "selected" : "deselected"}: $fullName');
+                              },
+                              cells: [
+                                DataCell(Text('${index + 1}')),
+                                DataCell(
+                                  SizedBox(
+                                    width: 150,
+                                    child: Text(
+                                      fullName,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                 ),
-                              ),
-                            DataCell(_buildEmploymentTypeBadge(employmentType)),
-                            DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: hoursWorked > 0
-                                      ? const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1)
-                                      : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  hoursWorked > 0
-                                      ? '${NumberFormat('#,##0.0').format(hoursWorked)} hrs'
-                                      : 'Not logged',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: hoursWorked > 0
-                                        ? const Color.fromARGB(255, 123, 31, 162)
-                                        : Colors.grey.shade600,
+                                DataCell(
+                                  SizedBox(
+                                    width: 180,
+                                    child: Text(
+                                      email,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            DataCell(_buildOvertimeBadge(overtimeHours)),
-                            DataCell(_buildDualPerformanceBadge(performanceMetrics)),
-                            DataCell(_buildStatusBadge(status)),
-                            DataCell(
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.add_circle,
-                                  size: 20,
-                                  color: Color.fromARGB(255, 123, 31, 162),
+                                DataCell(
+                                  SizedBox(
+                                    width: 140,
+                                    child: Text(
+                                      jobTitle,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 ),
-                                onPressed: () {
-                                  _logger.i('Log hours for: $uid ($fullName)');
-                                  _showHoursEntryDialog(uid, fullName, department);
-                                },
-                                tooltip: 'Log Hours',
-                              ),
+                                if (_shouldShowAllDepartments())
+                                  DataCell(
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        department,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                          color: Color.fromARGB(255, 123, 31, 162),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                DataCell(_buildEmploymentTypeBadge(employmentType)),
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: hoursWorked > 0
+                                          ? const Color.fromARGB(255, 123, 31, 162).withValues(alpha: 0.1)
+                                          : Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      hoursWorked > 0
+                                          ? '${NumberFormat('#,##0.0').format(hoursWorked)} hrs'
+                                          : 'Not logged',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: hoursWorked > 0
+                                            ? const Color.fromARGB(255, 123, 31, 162)
+                                            : Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(_buildOvertimeBadge(overtimeHours)),
+                                DataCell(_buildDualPerformanceBadge(performanceMetrics)),
+                                DataCell(_buildStatusBadge(status)),
+                                DataCell(
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.add_circle,
+                                      size: 20,
+                                      color: Color.fromARGB(255, 123, 31, 162),
+                                    ),
+                                    onPressed: () {
+                                      _logger.i('Log hours for: $uid ($fullName)');
+                                      _showHoursEntryDialog(uid, fullName, department);
+                                    },
+                                    tooltip: 'Log Hours',
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      // Optional: Show subtle loading indicator in corner when updating
+                      if (isLoadingNewData)
+                        Positioned(
+                          right: 16,
+                          top: 16,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 4,
+                                ),
+                              ],
                             ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color.fromARGB(255, 123, 31, 162),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Updating...',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color.fromARGB(255, 123, 31, 162),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -1419,12 +1516,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   Future<Map<String, dynamic>> _getEmployeeDetails(String uid) async {
-    _logger.d('=== 🔍 GETTING EMPLOYEE DETAILS ===');
-    _logger.d('UID: $uid');
-    
     try {
       // Try EmployeeDetails first
-      _logger.d('   Searching EmployeeDetails collection...');
       final employeeQuery = await _firestore
           .collection('EmployeeDetails')
           .where('uid', isEqualTo: uid)
@@ -1439,10 +1532,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         documentId = employeeQuery.docs.first.id;
         collectionName = 'EmployeeDetails';
         data = employeeQuery.docs.first.data();
-        _logger.i('   ✅ Found in EmployeeDetails, Doc ID: $documentId');
       } else {
         // Try Draft collection
-        _logger.d('   Not in EmployeeDetails, searching Draft collection...');
         final draftQuery = await _firestore
             .collection('Draft')
             .where('uid', isEqualTo: uid)
@@ -1453,12 +1544,10 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           documentId = draftQuery.docs.first.id;
           collectionName = 'Draft';
           data = draftQuery.docs.first.data();
-          _logger.i('   ✅ Found in Draft, Doc ID: $documentId');
         }
       }
 
       if (data == null) {
-        _logger.w('   ⚠️ Employee not found in either collection for UID: $uid');
         return {
           'jobTitle': '-',
           'employmentType': '-',
@@ -1473,16 +1562,11 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       Map<String, dynamic> hoursWorked = {};
       final hoursWorkedRaw = data['hoursWorked'];
       
-      _logger.d('   📊 Hours Worked Raw Type: ${hoursWorkedRaw.runtimeType}');
-      _logger.d('   📊 Hours Worked Raw Value: $hoursWorkedRaw');
-      
       if (hoursWorkedRaw != null) {
         if (hoursWorkedRaw is Map<String, dynamic>) {
           hoursWorked = hoursWorkedRaw;
-          _logger.d('   ✅ Hours worked is Map<String, dynamic>');
         } else if (hoursWorkedRaw is Map) {
           hoursWorked = Map<String, dynamic>.from(hoursWorkedRaw);
-          _logger.d('   🔄 Converted hours worked to Map<String, dynamic>');
         }
       }
 
@@ -1508,10 +1592,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         }
       }
 
-      _logger.d('   📊 Final Hours Worked: $hoursWorked');
-      _logger.d('   📊 Final Work Quality: $workQuality');
-      _logger.d('   📊 Final Days Worked: $daysWorked');
-
       final details = {
         'jobTitle': data['employmentDetails']?['jobTitle'] ?? 
                   data['employmentInfo']?['jobTitle'] ?? '-',
@@ -1525,8 +1605,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         'collectionName': collectionName,
       };
 
-      _logger.i('   ✅ Employee details retrieved successfully');
-      _logger.d('   Details: $details');
       return details;
 
     } catch (e, stackTrace) {
@@ -1557,12 +1635,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     final daysData = employeeData['daysWorked'];
     final int days = _extractMonthlyValue(daysData, monthKey).toInt();
     
-    _logger.d('📊 Monthly Data for ${employeeData['fullName']}:');
-    _logger.d('   Month: $monthKey');
-    _logger.d('   Hours: $hours hrs');
-    _logger.d('   Quality: $quality%');
-    _logger.d('   Days: $days days');
-    
     return {
       'hours': hours,
       'quality': quality > 0 ? quality : 80.0, // Default 80% if not set
@@ -1590,33 +1662,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   /// ============================================================================
-  /// NEW DAILY-BASED OVERTIME CALCULATION
+  /// DAILY-BASED OVERTIME CALCULATION
   /// ============================================================================
-  /// 
-  /// DAILY OVERTIME LOGIC (as per your requirements):
-  /// - Standard working hours: 8 hours/day (after 1-hour meal break)
-  /// - Maximum total hours (including overtime): 12 hours/day
-  /// - Overtime calculation:
-  ///   * If hours ≤ 8: No overtime (display "No OT")
-  ///   * If 8 < hours ≤ 12: Overtime = hours - 8
-  ///   * If hours > 12: Overtime capped at 4 hours (12 - 8)
-  /// 
-  /// Example: Employee works 10 hours → Overtime = 10 - 8 = 2 hours
-  /// ============================================================================
-  
   double _calculateMonthlyOvertimeFromDailyHours(double totalMonthlyHours, int daysWorked) {
-    _logger.d('=== 🕐 CALCULATING MONTHLY OVERTIME FROM DAILY HOURS ===');
-    _logger.d('Total Monthly Hours: $totalMonthlyHours hrs');
-    _logger.d('Days Worked: $daysWorked days');
-    
     if (totalMonthlyHours <= 0 || daysWorked <= 0) {
-      _logger.d('   ❌ No hours or no days worked - No overtime');
       return 0.0;
     }
     
     // Calculate average hours per day
     final avgHoursPerDay = totalMonthlyHours / daysWorked;
-    _logger.d('Average Hours/Day: ${avgHoursPerDay.toStringAsFixed(2)} hrs');
     
     // DAILY OVERTIME LOGIC:
     // Standard: 8 hours/day
@@ -1628,100 +1682,29 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     double overtimePerDay = 0.0;
     
     if (avgHoursPerDay <= standardHoursPerDay) {
-      // No overtime if average is 8 hours or less
       overtimePerDay = 0.0;
-      _logger.d('   ✅ Average ≤ 8 hrs/day → No Overtime');
     } else if (avgHoursPerDay <= maxHoursPerDay) {
-      // Overtime is the excess over 8 hours
       overtimePerDay = avgHoursPerDay - standardHoursPerDay;
-      _logger.d('   ✅ Average between 8-12 hrs/day → OT = ${overtimePerDay.toStringAsFixed(2)} hrs/day');
     } else {
-      // Cap overtime at 4 hours per day (if someone logs > 12 hours)
       overtimePerDay = maxOvertimePerDay;
-      _logger.d('   ⚠️ Average > 12 hrs/day → OT capped at $maxOvertimePerDay hrs/day');
     }
     
     // Calculate total monthly overtime
     final totalMonthlyOvertime = overtimePerDay * daysWorked;
     
-    _logger.d('═══════════════════════════════════════');
-    _logger.d('Overtime/Day: ${overtimePerDay.toStringAsFixed(2)} hrs');
-    _logger.d('Days Worked: $daysWorked days');
-    _logger.d('Total Monthly Overtime: ${totalMonthlyOvertime.toStringAsFixed(2)} hrs');
-    _logger.d('═══════════════════════════════════════');
-    
     return totalMonthlyOvertime;
   }
 
-  /// UPDATED EMPLOYMENT TYPES WITH 8-HOUR WORKDAY:
-  /// - Full-Time/Permanent: 8 hrs/day × 5 days/week × 4.33 weeks = 173.2 hours/month
-  /// - Contract: 8 hrs/day × 5 days/week × 4.33 weeks = 173.2 hours/month
-  /// - Part-Time: 4 hrs/day × 5 days/week × 4.33 weeks = 86.6 hours/month
-  /// - Casual: 8 hrs/day × 3 days/week × 4.33 weeks = 103.92 hours/month
-  double _getStandardHoursForEmploymentType(String employmentType) {
-    final type = employmentType.toLowerCase();
-    
-    // 5-day work week, 4.33 weeks per month average
-    const daysPerWeek = 5;
-    const weeksPerMonth = 4.33;
-    const hoursPerDay = 8.0;  // Updated to 8 hours (9th hour is lunch break)
-    
-    double dailyHours;
-    double daysWorkedPerWeek;
-    
-    switch (type) {
-      case 'full-time':
-      case 'permanent':
-      case 'contract':
-        dailyHours = hoursPerDay;
-        daysWorkedPerWeek = daysPerWeek as double;  // 5 days/week
-        break;
-        
-      case 'part-time':
-        dailyHours = hoursPerDay / 2;  // 4 hours/day
-        daysWorkedPerWeek = daysPerWeek as double;  // Still 5 days/week
-        break;
-        
-      case 'casual':
-      case 'intern':
-        dailyHours = hoursPerDay;
-        daysWorkedPerWeek = 3;  // 3 days/week
-        break;
-        
-      default:
-        // Default to full-time
-        dailyHours = hoursPerDay;
-        daysWorkedPerWeek = daysPerWeek as double;
-    }
-    
-    final monthlyStandard = dailyHours * daysWorkedPerWeek * weeksPerMonth;
-    
-    _logger.d('📊 Standard Hours Calculation:');
-    _logger.d('   Type: $employmentType');
-    _logger.d('   Daily Hours: $dailyHours hrs (8-hour workday)');
-    _logger.d('   Days/Week: $daysWorkedPerWeek days');
-    _logger.d('   Monthly Standard: $monthlyStandard hrs');
-    
-    return monthlyStandard;
-  }
-
-  /// Calculate DUAL performance metrics with REALISTIC monthly calculations
   Map<String, dynamic> _calculateDualPerformance({
     required double hoursWorked,
     required double workQuality,
     required String employmentType,
     required int daysWorked,
   }) {
-    _logger.d('=== 📊 REALISTIC DUAL PERFORMANCE CALCULATION ===');
-    _logger.d('Input: $hoursWorked hrs, $workQuality% quality, $employmentType, $daysWorked days');
-    
-    // === STANDARD HOURS CALCULATION ===
-    // 30-day month: 5 working days/week × 4.4 weeks = 22 working days
     const standardWorkingDaysPerMonth = 22;
     const standardHoursPerDay = 8.0;
-    const maxHoursPerDayWithOT = 12.0; // 8 regular + 4 overtime max
+    const maxHoursPerDayWithOT = 12.0;
     
-    // Calculate based on employment type
     double standardMonthlyHours;
     double maxMonthlyHours;
     double dailyStandardHours;
@@ -1731,8 +1714,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
       case 'full-time':
       case 'permanent':
       case 'contract':
-        // Full-time: 8 hrs/day × 22 days = 176 hrs/month standard
-        // Maximum: 12 hrs/day × 22 days = 264 hrs/month
         dailyStandardHours = standardHoursPerDay;
         dailyMaxHours = maxHoursPerDayWithOT;
         standardMonthlyHours = standardHoursPerDay * standardWorkingDaysPerMonth;
@@ -1740,8 +1721,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         break;
         
       case 'part-time':
-        // Part-time: 4 hrs/day × 22 days = 88 hrs/month standard
-        // Maximum: 6 hrs/day × 22 days = 132 hrs/month (limited overtime)
         dailyStandardHours = 4.0;
         dailyMaxHours = 6.0;
         standardMonthlyHours = 4.0 * standardWorkingDaysPerMonth;
@@ -1750,9 +1729,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         
       case 'casual':
       case 'intern':
-        // Casual: 8 hrs/day × 13 days (3 days/week × 4.4) = 104 hrs/month standard
-        // Maximum: 12 hrs/day × 13 days = 156 hrs/month
-        const casualDaysPerMonth = 13; // 3 days/week × 4.4 weeks
+        const casualDaysPerMonth = 13;
         dailyStandardHours = standardHoursPerDay;
         dailyMaxHours = maxHoursPerDayWithOT;
         standardMonthlyHours = standardHoursPerDay * casualDaysPerMonth;
@@ -1760,93 +1737,53 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         break;
         
       default:
-        // Default to full-time
         dailyStandardHours = standardHoursPerDay;
         dailyMaxHours = maxHoursPerDayWithOT;
         standardMonthlyHours = standardHoursPerDay * standardWorkingDaysPerMonth;
         maxMonthlyHours = maxHoursPerDayWithOT * standardWorkingDaysPerMonth;
     }
     
-    // === CURRENT PERFORMANCE (Days-based) ===
-    // Calculate expected hours for actual days worked
     final expectedStandardHoursForDays = daysWorked * dailyStandardHours;
     final expectedMaxHoursForDays = daysWorked * dailyMaxHours;
     
-    // Hours performance based on actual days worked
     double currentHoursPercentage;
     if (hoursWorked <= 0) {
       currentHoursPercentage = 0.0;
     } else if (hoursWorked <= expectedStandardHoursForDays) {
-      // 0 to standard hours = 0% to 100%
       currentHoursPercentage = (hoursWorked / expectedStandardHoursForDays) * 100.0;
     } else {
-      // Above standard, up to max hours = 100% to 150%
       final overtimeHours = hoursWorked - expectedStandardHoursForDays;
       final maxOvertimeHours = expectedMaxHoursForDays - expectedStandardHoursForDays;
       
       if (maxOvertimeHours > 0) {
-        final overtimePercentage = (overtimeHours / maxOvertimeHours) * 50.0; // 0-50% bonus
+        final overtimePercentage = (overtimeHours / maxOvertimeHours) * 50.0;
         currentHoursPercentage = (100.0 + overtimePercentage).clamp(0.0, 150.0);
       } else {
         currentHoursPercentage = 100.0;
       }
     }
     
-    // Quality is already a percentage (0-100%)
     final qualityPercentage = workQuality.clamp(0.0, 100.0);
-    
-    // Current combined: 70% hours + 30% quality
-    // This can exceed 100% if employee does overtime with good quality!
     final currentPerformance = (currentHoursPercentage * 0.7) + (qualityPercentage * 0.3);
     
-    // === MONTHLY PERFORMANCE (Full month projection) ===
-    // Hours performance projected to full month
     double monthlyHoursPercentage;
     if (hoursWorked <= 0) {
       monthlyHoursPercentage = 0.0;
     } else if (hoursWorked <= standardMonthlyHours) {
-      // 0 to standard hours = 0% to 100%
       monthlyHoursPercentage = (hoursWorked / standardMonthlyHours) * 100.0;
     } else {
-      // Above standard, up to max hours = 100% to 150%
       final overtimeHours = hoursWorked - standardMonthlyHours;
       final maxOvertimeHours = maxMonthlyHours - standardMonthlyHours;
       
       if (maxOvertimeHours > 0) {
-        final overtimePercentage = (overtimeHours / maxOvertimeHours) * 50.0; // 0-50% bonus
+        final overtimePercentage = (overtimeHours / maxOvertimeHours) * 50.0;
         monthlyHoursPercentage = (100.0 + overtimePercentage).clamp(0.0, 150.0);
       } else {
         monthlyHoursPercentage = 100.0;
       }
     }
     
-    // Monthly combined: 70% hours + 30% quality
     final monthlyPerformance = (monthlyHoursPercentage * 0.7) + (qualityPercentage * 0.3);
-    
-    _logger.d('═══ Calculation Details ═══');
-    _logger.d('Employment Type: $employmentType');
-    _logger.d('Days Worked: $daysWorked days');
-    _logger.d('');
-    _logger.d('Daily Rates:');
-    _logger.d('  Standard: $dailyStandardHours hrs/day');
-    _logger.d('  Maximum: $dailyMaxHours hrs/day');
-    _logger.d('');
-    _logger.d('Monthly Targets (22 working days):');
-    _logger.d('  Standard: $standardMonthlyHours hrs/month');
-    _logger.d('  Maximum: $maxMonthlyHours hrs/month');
-    _logger.d('');
-    _logger.d('Current Period ($daysWorked days):');
-    _logger.d('  Expected Standard: $expectedStandardHoursForDays hrs');
-    _logger.d('  Expected Maximum: $expectedMaxHoursForDays hrs');
-    _logger.d('  Actual Worked: $hoursWorked hrs');
-    _logger.d('  Hours Performance: ${currentHoursPercentage.toStringAsFixed(1)}%');
-    _logger.d('');
-    _logger.d('Quality: ${qualityPercentage.toStringAsFixed(1)}%');
-    _logger.d('');
-    _logger.d('Final Performance:');
-    _logger.d('  Current (Days-based): ${currentPerformance.toStringAsFixed(1)}%');
-    _logger.d('  Monthly (Full-month): ${monthlyPerformance.toStringAsFixed(1)}%');
-    _logger.d('═══════════════════════════');
     
     return {
       'currentPerformance': currentPerformance,
@@ -1859,8 +1796,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
   }
 
   void _showSearchDialog() {
-    _logger.d('Opening search dialog');
-    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1929,10 +1864,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           final hoursWorked = monthlyData['hours'] as double;
           final daysWorked = monthlyData['daysWorked'] as int;
           
-          // Use the new daily-based overtime calculation
           final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
-          
-          _logger.d('Forwarding employee: ${employee['fullName']} - Hours: $hoursWorked, OT: $overtimeHours');
           
           employeeDataList.add({
             'employeeId': uid,
@@ -1949,8 +1881,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           });
         }
       }
-
-      _logger.i('Forwarding ${employeeDataList.length} employees to HoursForwarded collection');
 
       await _firestore.collection('HoursForwarded').add({
         'supervisorId': _currentUser!.uid,
@@ -2023,9 +1953,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     ).then((saved) {
       if (saved == true) {
         _logger.i('Hours saved, refreshing dashboard');
+        // Don't clear cache - let stream update naturally
         setState(() {});
-      } else {
-        _logger.d('Hours dialog closed without saving');
       }
     });
   }
