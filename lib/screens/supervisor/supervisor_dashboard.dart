@@ -48,6 +48,16 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     ),
   );
 
+  // ============================================================================
+  // PERFORMANCE CALCULATION CONSTANTS
+  // ============================================================================
+static const double standardWorkHoursPerDay = 8.0;
+static const double maxOvertimeHoursPerDay = 4.0;
+static const double maxHoursPerDay = standardWorkHoursPerDay + maxOvertimeHoursPerDay;
+static const double hoursWeight = 0.45;
+static const double qualityWeight = 0.55;
+static const double maxOvertimeBonus = 20.0;
+
   @override
   void initState() {
     super.initState();
@@ -535,6 +545,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         double totalHours = 0;
         double totalOvertime = 0;
         int employeesWithOvertime = 0;
+        double totalPerformance = 0;
+        int employeesWithPerformance = 0;
         
         for (var employee in employees) {
           final monthlyData = _getMonthlyData(employee);
@@ -550,17 +562,33 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               totalOvertime += overtime;
               employeesWithOvertime++;
             }
+
+            // Calculate performance
+            final performanceMetrics = _calculateRealisticPerformance(
+              hoursWorked: hoursWorked,
+              workQuality: monthlyData['quality'] as double,
+              employmentType: employee['employmentType'] ?? 'Full-Time',
+              daysWorked: daysWorked,
+            );
+
+            if (daysWorked > 0) {
+              totalPerformance += performanceMetrics['monthlyPerformance'] as double;
+              employeesWithPerformance++;
+            }
           }
         }
 
         final avgHours = totalEmployees > 0 ? totalHours / totalEmployees : 0;
+        final avgPerformance = employeesWithPerformance > 0 
+            ? totalPerformance / employeesWithPerformance 
+            : 0;
 
-        _logger.d('Stats: Total=$totalEmployees, TotalHours=$totalHours, Overtime=$totalOvertime, AvgHours=$avgHours');
+        _logger.d('Stats: Total=$totalEmployees, TotalHours=$totalHours, Overtime=$totalOvertime, AvgHours=$avgHours, AvgPerf=$avgPerformance');
 
         return LayoutBuilder(
           builder: (context, constraints) {
             final screenWidth = constraints.maxWidth;
-            final cardWidth = (screenWidth - (screenWidth * 0.04 * 2) - (screenWidth * 0.015 * 5)) / 6;
+            final cardWidth = (screenWidth - (screenWidth * 0.04 * 2) - (screenWidth * 0.015 * 6)) / 7;
             final spacing = screenWidth * 0.015;
             
             return Container(
@@ -607,9 +635,17 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                     ),
                     SizedBox(width: spacing),
                     _buildStatCard(
+                      'Avg Performance',
+                      '${avgPerformance.toStringAsFixed(1)}%',
+                      const Color.fromARGB(255, 156, 39, 176),
+                      Icons.star,
+                      cardWidth,
+                    ),
+                    SizedBox(width: spacing),
+                    _buildStatCard(
                       'Employees w/ OT',
                       employeesWithOvertime.toString(),
-                      const Color.fromARGB(255, 156, 39, 176),
+                      const Color.fromARGB(255, 255, 87, 34),
                       Icons.trending_up,
                       cardWidth,
                     ),
@@ -882,8 +918,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                             // Calculate overtime using DAILY logic
                             final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
                             
-                            // Calculate dual performance metrics
-                            final performanceMetrics = _calculateDualPerformance(
+                            // Calculate REALISTIC performance metrics (45% hours + 55% quality + 20% OT bonus)
+                            final performanceMetrics = _calculateRealisticPerformance(
                               hoursWorked: hoursWorked,
                               workQuality: workQuality,
                               employmentType: employmentType,
@@ -984,7 +1020,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                                   ),
                                 ),
                                 DataCell(_buildOvertimeBadge(overtimeHours)),
-                                DataCell(_buildDualPerformanceBadge(performanceMetrics)),
+                                DataCell(_buildRealisticPerformanceBadge(performanceMetrics)),
                                 DataCell(_buildStatusBadge(status)),
                                 DataCell(
                                   IconButton(
@@ -1255,41 +1291,70 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     );
   }
 
-  Widget _buildDualPerformanceBadge(Map<String, dynamic> metrics) {
+  // ============================================================================
+  // REALISTIC PERFORMANCE BADGE
+  // Formula: (Hours × 45%) + (Quality × 55%) + Overtime Bonus (max 20%)
+  // ============================================================================
+  Widget _buildRealisticPerformanceBadge(Map<String, dynamic> metrics) {
     final currentPercent = metrics['currentPerformance'] as double;
     final monthlyPercent = metrics['monthlyPerformance'] as double;
     final daysWorked = metrics['daysWorked'] as int;
+    final overtimeBonus = metrics['overtimeBonus'] as double;
     
     // Use current performance for color determination if days < 22, otherwise use monthly
     final displayPercent = daysWorked < 22 ? currentPercent : monthlyPercent;
     
     Color color;
     IconData icon;
+    String grade;
     
-    if (displayPercent >= 141) {
+    // Performance grading based on realistic expectations
+    if (displayPercent >= 115) {
+      // 115%+ = Exceptional (with significant OT)
       color = const Color.fromARGB(255, 156, 39, 176); // Purple
       icon = Icons.emoji_events; // Trophy
-    } else if (displayPercent >= 111) {
+      grade = 'S+';
+    } else if (displayPercent >= 105) {
+      // 105-114% = Excellent (with some OT)
       color = const Color.fromARGB(255, 46, 125, 50); // Green
+      icon = Icons.star;
+      grade = 'S';
+    } else if (displayPercent >= 95) {
+      // 95-104% = Very Good (near perfect or with slight OT)
+      color = const Color.fromARGB(255, 76, 175, 80); // Light Green
       icon = Icons.trending_up;
-    } else if (displayPercent >= 90) {
+      grade = 'A+';
+    } else if (displayPercent >= 85) {
+      // 85-94% = Good (above average)
       color = const Color.fromARGB(255, 2, 136, 209); // Blue
       icon = Icons.check_circle;
+      grade = 'A';
     } else if (displayPercent >= 75) {
+      // 75-84% = Satisfactory (acceptable)
+      color = const Color.fromARGB(255, 3, 169, 244); // Light Blue
+      icon = Icons.thumbs_up_down;
+      grade = 'B';
+    } else if (displayPercent >= 65) {
+      // 65-74% = Below Average (needs improvement)
       color = const Color.fromARGB(255, 255, 193, 7); // Yellow
       icon = Icons.trending_flat;
+      grade = 'C';
     } else if (displayPercent >= 50) {
+      // 50-64% = Poor (significant issues)
       color = const Color.fromARGB(255, 255, 152, 0); // Orange
       icon = Icons.trending_down;
+      grade = 'D';
     } else {
+      // <50% = Critical (very poor)
       color = Colors.red;
       icon = Icons.warning;
+      grade = 'F';
     }
     
     return Container(
       constraints: const BoxConstraints(
-        minWidth: 105,
-        maxWidth: 125,
+        minWidth: 110,
+        maxWidth: 135,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
@@ -1309,30 +1374,79 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (daysWorked > 0) ...[
-                  // Top row: Current Performance (Days-based)
-                  Text(
-                    'Now: ${currentPercent.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                      height: 1.2,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // Top row: Current Performance
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Now: ',
+                        style: TextStyle(
+                          color: color.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 10,
+                          height: 1.2,
+                        ),
+                      ),
+                      Text(
+                        '${currentPercent.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          height: 1.2,
+                        ),
+                      ),
+                      if (overtimeBonus > 0) ...[
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.add_circle,
+                          size: 8,
+                          color: color.withValues(alpha: 0.6),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 1),
-                  // Bottom row: Monthly Performance
-                  Text(
-                    'Month: ${monthlyPercent.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      color: color.withValues(alpha: 0.75),
-                      fontWeight: FontWeight.w500,
-                      fontSize: 9,
-                      height: 1.2,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // Bottom row: Monthly Performance with Grade
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Month: ',
+                        style: TextStyle(
+                          color: color.withValues(alpha: 0.65),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 9,
+                          height: 1.2,
+                        ),
+                      ),
+                      Text(
+                        '${monthlyPercent.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          color: color.withValues(alpha: 0.8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          grade,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 8,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ] else ...[
                   Text(
@@ -1663,6 +1777,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
   /// ============================================================================
   /// DAILY-BASED OVERTIME CALCULATION
+  /// Standard: 8 hours/day, Maximum: 12 hours/day (4 hours OT max)
   /// ============================================================================
   double _calculateMonthlyOvertimeFromDailyHours(double totalMonthlyHours, int daysWorked) {
     if (totalMonthlyHours <= 0 || daysWorked <= 0) {
@@ -1672,22 +1787,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     // Calculate average hours per day
     final avgHoursPerDay = totalMonthlyHours / daysWorked;
     
-    // DAILY OVERTIME LOGIC:
-    // Standard: 8 hours/day
-    // Maximum: 12 hours/day
-    const standardHoursPerDay = 8.0;
-    const maxHoursPerDay = 12.0;
-    const maxOvertimePerDay = maxHoursPerDay - standardHoursPerDay; // 4 hours
-    
     double overtimePerDay = 0.0;
     
-    if (avgHoursPerDay <= standardHoursPerDay) {
-      overtimePerDay = 0.0;
-    } else if (avgHoursPerDay <= maxHoursPerDay) {
-      overtimePerDay = avgHoursPerDay - standardHoursPerDay;
-    } else {
-      overtimePerDay = maxOvertimePerDay;
-    }
+if (avgHoursPerDay <= standardWorkHoursPerDay) {
+  overtimePerDay = 0.0;
+} else if (avgHoursPerDay <= maxHoursPerDay) {
+  overtimePerDay = avgHoursPerDay - standardWorkHoursPerDay;
+} else {
+  overtimePerDay = maxOvertimeHoursPerDay;
+}
     
     // Calculate total monthly overtime
     final totalMonthlyOvertime = overtimePerDay * daysWorked;
@@ -1695,29 +1803,48 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     return totalMonthlyOvertime;
   }
 
-  Map<String, dynamic> _calculateDualPerformance({
+  /// ============================================================================
+  /// REALISTIC PERFORMANCE CALCULATION
+  /// Formula: (Hours Score × 45%) + (Quality Score × 55%) + Overtime Bonus (max 20%)
+  /// 
+  /// BREAKDOWN:
+  /// - Hours Component (45%): Based on 8-hour standard workday
+  /// - Quality Component (55%): Work quality rating (0-100%)
+  /// - Overtime Bonus (+20% max): Additional percentage for overtime hours
+  ///   • 1 OT hour = +5% bonus
+  ///   • 2 OT hours = +10% bonus
+  ///   • 3 OT hours = +15% bonus
+  ///   • 4 OT hours = +20% bonus (maximum)
+  /// 
+  /// EXAMPLES:
+  /// 1. Perfect performance without OT: 100% (45% + 55%)
+  /// 2. Perfect with 4 hrs OT: 120% (45% + 55% + 20%)
+  /// 3. Half hours, full quality: 77.5% (22.5% + 55%)
+  /// ============================================================================
+  Map<String, dynamic> _calculateRealisticPerformance({
     required double hoursWorked,
     required double workQuality,
     required String employmentType,
     required int daysWorked,
   }) {
-    const standardWorkingDaysPerMonth = 22;
-    const standardHoursPerDay = 8.0;
-    const maxHoursPerDayWithOT = 12.0;
+    _logger.d('📊 Calculating realistic performance: hours=$hoursWorked, quality=$workQuality, type=$employmentType, days=$daysWorked');
     
-    double standardMonthlyHours;
-    double maxMonthlyHours;
+    const standardWorkingDaysPerMonth = 22;
+    
+    // Determine standard hours based on employment type
     double dailyStandardHours;
     double dailyMaxHours;
+    double standardMonthlyHours;
+    double maxMonthlyHours;
     
     switch (employmentType.toLowerCase()) {
       case 'full-time':
       case 'permanent':
       case 'contract':
-        dailyStandardHours = standardHoursPerDay;
-        dailyMaxHours = maxHoursPerDayWithOT;
-        standardMonthlyHours = standardHoursPerDay * standardWorkingDaysPerMonth;
-        maxMonthlyHours = maxHoursPerDayWithOT * standardWorkingDaysPerMonth;
+        dailyStandardHours = standardWorkHoursPerDay;
+        dailyMaxHours = maxHoursPerDay;
+        standardMonthlyHours = standardWorkHoursPerDay * standardWorkingDaysPerMonth;
+        maxMonthlyHours = maxHoursPerDay * standardWorkingDaysPerMonth;
         break;
         
       case 'part-time':
@@ -1729,69 +1856,100 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         
       case 'casual':
       case 'intern':
-        const casualDaysPerMonth = 13;
-        dailyStandardHours = standardHoursPerDay;
-        dailyMaxHours = maxHoursPerDayWithOT;
-        standardMonthlyHours = standardHoursPerDay * casualDaysPerMonth;
-        maxMonthlyHours = maxHoursPerDayWithOT * casualDaysPerMonth;
+          dailyStandardHours = standardWorkHoursPerDay;
+          dailyMaxHours = maxHoursPerDay;
+          standardMonthlyHours = standardWorkHoursPerDay * standardWorkingDaysPerMonth;
+          maxMonthlyHours = maxHoursPerDay * standardWorkingDaysPerMonth;
         break;
         
       default:
-        dailyStandardHours = standardHoursPerDay;
-        dailyMaxHours = maxHoursPerDayWithOT;
-        standardMonthlyHours = standardHoursPerDay * standardWorkingDaysPerMonth;
-        maxMonthlyHours = maxHoursPerDayWithOT * standardWorkingDaysPerMonth;
+        dailyStandardHours = standardWorkHoursPerDay;
+        dailyMaxHours = maxHoursPerDay;
+        standardMonthlyHours = standardWorkHoursPerDay * standardWorkingDaysPerMonth;
+        maxMonthlyHours = maxHoursPerDay * standardWorkingDaysPerMonth;
     }
+    
+    // ============================================================================
+    // CURRENT PERFORMANCE (based on days worked so far)
+    // ============================================================================
     
     final expectedStandardHoursForDays = daysWorked * dailyStandardHours;
     final expectedMaxHoursForDays = daysWorked * dailyMaxHours;
     
-    double currentHoursPercentage;
+    // Calculate hours score (0-100%)
+    double hoursScore = 0.0;
+    double overtimeHoursForBonus = 0.0;
+    
     if (hoursWorked <= 0) {
-      currentHoursPercentage = 0.0;
+      hoursScore = 0.0;
     } else if (hoursWorked <= expectedStandardHoursForDays) {
-      currentHoursPercentage = (hoursWorked / expectedStandardHoursForDays) * 100.0;
+      // Below or at standard hours
+      hoursScore = (hoursWorked / expectedStandardHoursForDays) * 100.0;
     } else {
-      final overtimeHours = hoursWorked - expectedStandardHoursForDays;
-      final maxOvertimeHours = expectedMaxHoursForDays - expectedStandardHoursForDays;
-      
-      if (maxOvertimeHours > 0) {
-        final overtimePercentage = (overtimeHours / maxOvertimeHours) * 50.0;
-        currentHoursPercentage = (100.0 + overtimePercentage).clamp(0.0, 150.0);
-      } else {
-        currentHoursPercentage = 100.0;
-      }
+      // Has overtime
+      hoursScore = 100.0; // Full score for hours
+      overtimeHoursForBonus = hoursWorked - expectedStandardHoursForDays;
     }
     
-    final qualityPercentage = workQuality.clamp(0.0, 100.0);
-    final currentPerformance = (currentHoursPercentage * 0.7) + (qualityPercentage * 0.3);
+    // Calculate overtime bonus (0-20%)
+    // Formula: (OT hours / max possible OT hours) × 20%
+    final maxPossibleOT = expectedMaxHoursForDays - expectedStandardHoursForDays;
+    double overtimeBonus = 0.0;
     
-    double monthlyHoursPercentage;
+    if (maxPossibleOT > 0 && overtimeHoursForBonus > 0) {
+      overtimeBonus = (overtimeHoursForBonus / maxPossibleOT) * maxOvertimeBonus;
+      overtimeBonus = overtimeBonus.clamp(0.0, maxOvertimeBonus);
+    }
+    
+    // Quality score (0-100%)
+    final qualityScore = workQuality.clamp(0.0, 100.0);
+    
+    // CURRENT PERFORMANCE = (Hours × 45%) + (Quality × 55%) + OT Bonus
+    final currentPerformance = (hoursScore * hoursWeight) + (qualityScore * qualityWeight) + overtimeBonus;
+
+    
+    _logger.d('  Current: hours_score=$hoursScore, quality_score=$qualityScore, ot_bonus=$overtimeBonus => $currentPerformance%');
+    
+    // ============================================================================
+    // MONTHLY PERFORMANCE (based on full month expectation)
+    // ============================================================================
+    
+    // Calculate hours score for monthly
+    double monthlyHoursScore = 0.0;
+    double monthlyOvertimeHours = 0.0;
+    
     if (hoursWorked <= 0) {
-      monthlyHoursPercentage = 0.0;
+      monthlyHoursScore = 0.0;
     } else if (hoursWorked <= standardMonthlyHours) {
-      monthlyHoursPercentage = (hoursWorked / standardMonthlyHours) * 100.0;
+      monthlyHoursScore = (hoursWorked / standardMonthlyHours) * 100.0;
     } else {
-      final overtimeHours = hoursWorked - standardMonthlyHours;
-      final maxOvertimeHours = maxMonthlyHours - standardMonthlyHours;
-      
-      if (maxOvertimeHours > 0) {
-        final overtimePercentage = (overtimeHours / maxOvertimeHours) * 50.0;
-        monthlyHoursPercentage = (100.0 + overtimePercentage).clamp(0.0, 150.0);
-      } else {
-        monthlyHoursPercentage = 100.0;
-      }
+      monthlyHoursScore = 100.0;
+      monthlyOvertimeHours = hoursWorked - standardMonthlyHours;
     }
     
-    final monthlyPerformance = (monthlyHoursPercentage * 0.7) + (qualityPercentage * 0.3);
+    // Calculate monthly overtime bonus
+    final maxMonthlyOT = maxMonthlyHours - standardMonthlyHours;
+    double monthlyOvertimeBonus = 0.0;
+    
+    if (maxMonthlyOT > 0 && monthlyOvertimeHours > 0) {
+      monthlyOvertimeBonus = (monthlyOvertimeHours / maxMonthlyOT) * maxOvertimeBonus;
+      monthlyOvertimeBonus = monthlyOvertimeBonus.clamp(0.0, maxOvertimeBonus);
+    }
+    
+    // MONTHLY PERFORMANCE = (Hours × 45%) + (Quality × 55%) + OT Bonus
+    final monthlyPerformance = (monthlyHoursScore * hoursWeight) + (qualityScore * qualityWeight) + monthlyOvertimeBonus;
+    
+    _logger.d('  Monthly: hours_score=$monthlyHoursScore, quality_score=$qualityScore, ot_bonus=$monthlyOvertimeBonus => $monthlyPerformance%');
     
     return {
-      'currentPerformance': currentPerformance,
-      'monthlyPerformance': monthlyPerformance,
+      'currentPerformance': currentPerformance.clamp(0.0, 120.0),
+      'monthlyPerformance': monthlyPerformance.clamp(0.0, 120.0),
       'daysWorked': daysWorked,
-      'expectedHoursForDays': expectedStandardHoursForDays,
-      'currentHoursPercentage': currentHoursPercentage,
-      'monthlyHoursPercentage': monthlyHoursPercentage,
+      'hoursScore': hoursScore,
+      'qualityScore': qualityScore,
+      'overtimeBonus': overtimeBonus,
+      'monthlyHoursScore': monthlyHoursScore,
+      'monthlyOvertimeBonus': monthlyOvertimeBonus,
     };
   }
 
@@ -1863,8 +2021,16 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           final monthlyData = _getMonthlyData(employee);
           final hoursWorked = monthlyData['hours'] as double;
           final daysWorked = monthlyData['daysWorked'] as int;
+          final workQuality = monthlyData['quality'] as double;
           
           final overtimeHours = _calculateMonthlyOvertimeFromDailyHours(hoursWorked, daysWorked);
+          
+          final performanceMetrics = _calculateRealisticPerformance(
+            hoursWorked: hoursWorked,
+            workQuality: workQuality,
+            employmentType: employee['employmentType'] ?? 'Full-Time',
+            daysWorked: daysWorked,
+          );
           
           employeeDataList.add({
             'employeeId': uid,
@@ -1876,6 +2042,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             'hoursWorked': hoursWorked,
             'overtimeHours': overtimeHours,
             'daysWorked': daysWorked,
+            'workQuality': workQuality,
+            'performance': performanceMetrics['monthlyPerformance'],
             'month': DateFormat('yyyy-MM').format(_selectedMonth),
             'monthDisplay': DateFormat('MMMM yyyy').format(_selectedMonth),
           });
@@ -1902,6 +2070,12 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           0,
           (total, emp) => total + (emp['overtimeHours'] as double),
         ),
+        'avgPerformance': employeeDataList.isNotEmpty
+            ? employeeDataList.fold<double>(
+                0,
+                (total, emp) => total + (emp['performance'] as double),
+              ) / employeeDataList.length
+            : 0.0,
       });
 
       _logger.i('✅ Hours forwarded successfully to Accountant');
