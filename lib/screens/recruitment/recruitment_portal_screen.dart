@@ -86,7 +86,6 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
     return true;
   }
 
-  // ✅ NEW: Helper method to get proper content type
   String _getContentType(String extension) {
     final ext = extension.toLowerCase();
     _logger.d('Getting content type for extension: $ext');
@@ -171,7 +170,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
 
       _logger.d('Storage path: Recruitees/$fileName');
 
-      // ✅ UPDATED: Create metadata with explicit contentType
+      // Create metadata with explicit contentType
       final metadata = SettableMetadata(
         contentType: contentType,
         customMetadata: {
@@ -327,19 +326,20 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
+        backgroundColor: Colors.white,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: const Color(0xFF10B981).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.check_circle,
                 size: 60,
-                color: Colors.green.shade600,
+                color: Color(0xFF10B981),
               ),
             ),
             const SizedBox(height: 24),
@@ -348,43 +348,45 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Color.fromARGB(255, 66, 10, 113),
+                color: Color(0xFF1A1A2E),
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'Thank you for your interest in joining JV Almacis. Our recruitment team will review your application and contact you soon.',
               style: TextStyle(
                 fontSize: 15,
-                color: Colors.grey.shade700,
-                height: 1.4,
+                color: Color(0xFF64748B),
+                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue.shade200),
+                border: Border.all(
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                ),
               ),
-              child: Row(
+              child: const Row(
                 children: [
                   Icon(
                     Icons.email_outlined,
-                    color: Colors.blue.shade700,
+                    color: Color(0xFF3B82F6),
                     size: 20,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Check your email for confirmation',
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.blue.shade900,
-                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF3B82F6),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -403,13 +405,13 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                 Navigator.of(context).pop(); // Return to welcome screen
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(255, 66, 10, 113),
+                backgroundColor: const Color(0xFFEA580C),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                elevation: 2,
+                elevation: 0,
               ),
               child: const Text(
                 'Done',
@@ -429,169 +431,46 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final contentWidth = screenWidth > 800 ? screenWidth * 0.5 : screenWidth * 0.9;
+    final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.fromARGB(255, 72, 7, 118),
-              Color.fromARGB(255, 135, 98, 195),
-              Color.fromARGB(255, 72, 7, 118),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.2),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                      onPressed: () {
-                        _logger.i('Back button pressed - returning to previous screen');
-                        Navigator.pop(context);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Recruitment Portal',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Text(
-                            'Join Our Team',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Modern Header
+            _buildHeader(),
 
-              // Main content
-              Expanded(
-                child: Center(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Container(
-                        constraints: BoxConstraints(maxWidth: contentWidth),
-                        padding: const EdgeInsets.all(24.0),
+            // Main content
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isSmallScreen ? 20.0 : 40.0,
+                        vertical: 24.0,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 600),
                         child: Form(
                           key: _formKey,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               // Info card
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      Icons.work_outline,
-                                      size: 48,
-                                      color: Colors.white.withValues(alpha: 0.9),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    const Text(
-                                      'Start Your Career Journey',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'Submit your application by filling in your details and uploading your CV. No account required!',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        color: Colors.white.withValues(alpha: 0.85),
-                                        height: 1.4,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              _buildInfoCard(),
 
                               const SizedBox(height: 32),
 
                               // Full Name field
-                              TextFormField(
+                              _buildTextField(
                                 controller: _fullNameController,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  labelText: 'Full Name',
-                                  labelStyle: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
-                                  hintText: 'Enter your full name',
-                                  hintStyle: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                  ),
-                                  prefixIcon: const Icon(
-                                    Icons.person_outline,
-                                    color: Colors.white70,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.white38,
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.white38,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  errorBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.redAccent,
-                                    ),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(alpha: 0.1),
-                                ),
+                                label: 'Full Name',
+                                hint: 'Enter your full name',
+                                icon: Icons.person_outline,
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
                                     return 'Full name is required';
@@ -606,50 +485,11 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                               const SizedBox(height: 20),
 
                               // Email field
-                              TextFormField(
+                              _buildTextField(
                                 controller: _emailController,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  labelText: 'Email Address',
-                                  labelStyle: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
-                                  hintText: 'Enter your email',
-                                  hintStyle: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                  ),
-                                  prefixIcon: const Icon(
-                                    Icons.email_outlined,
-                                    color: Colors.white70,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.white38,
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.white38,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  errorBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    borderSide: const BorderSide(
-                                      color: Colors.redAccent,
-                                    ),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(alpha: 0.1),
-                                ),
+                                label: 'Email Address',
+                                hint: 'you@example.com',
+                                icon: Icons.email_outlined,
                                 keyboardType: TextInputType.emailAddress,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
@@ -666,287 +506,23 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                               const SizedBox(height: 24),
 
                               // CV Upload section
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: _cvFileName != null
-                                        ? Colors.green.withValues(alpha: 0.5)
-                                        : Colors.white.withValues(alpha: 0.3),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.upload_file,
-                                          color: Colors.white.withValues(alpha: 0.9),
-                                          size: 28,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                'Upload Your CV',
-                                                style: TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                'PDF, DOC, or DOCX (Max 10MB)',
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.7),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    if (_cvFileName != null) ...[
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green
-                                              .withValues(alpha: 0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: Colors.green
-                                                .withValues(alpha: 0.5),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.check_circle,
-                                              color: Colors.greenAccent,
-                                              size: 24,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    'File Selected',
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    _cvFileName!,
-                                                    style: TextStyle(
-                                                      color: Colors.white
-                                                          .withValues(
-                                                              alpha: 0.9),
-                                                      fontSize: 12,
-                                                    ),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons.close,
-                                                color: Colors.white70,
-                                              ),
-                                              onPressed: () {
-                                                setState(() {
-                                                  _selectedCvFile = null;
-                                                  _cvFileName = null;
-                                                });
-                                                _logger.i('CV file removed');
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                    ],
-                                    ElevatedButton.icon(
-                                      onPressed: _isUploadingFile || _isSubmitting
-                                          ? null
-                                          : _selectCvFile,
-                                      icon: Icon(_cvFileName != null
-                                          ? Icons.refresh
-                                          : Icons.attach_file),
-                                      label: Text(_cvFileName != null
-                                          ? 'Change CV'
-                                          : 'Select CV File'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.white,
-                                        foregroundColor:
-                                            const Color.fromARGB(255, 66, 10, 113),
-                                        padding:
-                                            const EdgeInsets.symmetric(vertical: 14),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        elevation: 2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              _buildCvUploadSection(),
 
                               const SizedBox(height: 24),
 
                               // Error message
-                              if (_errorMessage != null)
-                                Container(
-                                  margin: const EdgeInsets.only(bottom: 20),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.red.withValues(alpha: 0.5),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Padding(
-                                        padding: EdgeInsets.only(top: 2),
-                                        child: Icon(
-                                          Icons.error_outline,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _errorMessage!,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              if (_errorMessage != null) ...[
+                                _buildErrorMessage(),
+                                const SizedBox(height: 20),
+                              ],
 
                               // Submit button
-                              SizedBox(
-                                width: double.infinity,
-                                height: 56,
-                                child: ElevatedButton(
-                                  onPressed: _isSubmitting || _isUploadingFile
-                                      ? null
-                                      : _submitApplication,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor:
-                                        const Color.fromARGB(255, 66, 10, 113),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    elevation: 8,
-                                    shadowColor: Colors.black45,
-                                  ),
-                                  child: _isSubmitting || _isUploadingFile
-                                      ? Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const SizedBox(
-                                              height: 24,
-                                              width: 24,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2.5,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<Color>(
-                                                  Color.fromARGB(255, 66, 10, 113),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            Text(
-                                              _isUploadingFile
-                                                  ? 'Uploading CV...'
-                                                  : 'Submitting...',
-                                              style: const TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      : const Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.send),
-                                            SizedBox(width: 12),
-                                            Text(
-                                              'Submit Application',
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                letterSpacing: 1,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                ),
-                              ),
+                              _buildSubmitButton(isSmallScreen),
 
                               const SizedBox(height: 24),
 
                               // Privacy note
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(
-                                      Icons.lock_outline,
-                                      size: 20,
-                                      color: Colors.white.withValues(alpha: 0.8),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'Your information is secure and will only be used for recruitment purposes.',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color:
-                                              Colors.white.withValues(alpha: 0.8),
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              _buildPrivacyNote(),
                             ],
                           ),
                         ),
@@ -955,9 +531,500 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                   ),
                 ),
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F7FA),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_back,
+                color: Color(0xFF1A1A2E),
+              ),
+              onPressed: () {
+                _logger.i('Back button pressed - returning to previous screen');
+                Navigator.pop(context);
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Join Our Team',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Submit your application',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFEA580C),
+            Color(0xFFC2410C),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEA580C).withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.work_outline,
+              size: 32,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Start Your Career Journey',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Submit your application by filling in your details and uploading your CV. No account required!',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.white,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+    required String? Function(String?) validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF334155),
           ),
         ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          style: const TextStyle(
+            color: Color(0xFF1A1A2E),
+            fontSize: 15,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 15,
+            ),
+            prefixIcon: Icon(
+              icon,
+              color: const Color(0xFF64748B),
+              size: 20,
+            ),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFE2E8F0),
+                width: 1.5,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFE2E8F0),
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFEA580C),
+                width: 2,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFDC2626),
+                width: 1.5,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFFDC2626),
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+          ),
+          validator: validator,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCvUploadSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _cvFileName != null
+              ? const Color(0xFF10B981)
+              : const Color(0xFFE2E8F0),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEA580C).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.upload_file,
+                  color: Color(0xFFEA580C),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upload Your CV',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A2E),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'PDF, DOC, or DOCX (Max 10MB)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_cvFileName != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle,
+                    color: Color(0xFF10B981),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'File Selected',
+                          style: TextStyle(
+                            color: Color(0xFF10B981),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _cvFileName!,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: Color(0xFF64748B),
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _selectedCvFile = null;
+                        _cvFileName = null;
+                      });
+                      _logger.i('CV file removed');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _isUploadingFile || _isSubmitting
+                  ? null
+                  : _selectCvFile,
+              icon: Icon(_cvFileName != null
+                  ? Icons.refresh
+                  : Icons.attach_file),
+              label: Text(_cvFileName != null
+                  ? 'Change CV'
+                  : 'Select CV File'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEA580C),
+                side: const BorderSide(
+                  color: Color(0xFFEA580C),
+                  width: 1.5,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFFECACA),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Color(0xFFDC2626),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: const TextStyle(
+                color: Color(0xFFDC2626),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton(bool isSmallScreen) {
+    return SizedBox(
+      height: isSmallScreen ? 52 : 56,
+      child: ElevatedButton(
+        onPressed: _isSubmitting || _isUploadingFile
+            ? null
+            : _submitApplication,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFEA580C),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFFE2E8F0),
+          disabledForegroundColor: const Color(0xFF94A3B8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: _isSubmitting || _isUploadingFile
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    _isUploadingFile
+                        ? 'Uploading CV...'
+                        : 'Submitting...',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.send, size: 20),
+                  SizedBox(width: 12),
+                  Text(
+                    'Submit Application',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildPrivacyNote() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3B82F6).withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.lock_outline,
+            size: 18,
+            color: Color(0xFF3B82F6),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Your information is secure and will only be used for recruitment purposes.',
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFF475569),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -110,6 +110,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
       if (user != null) {
         _logger.i('User is logged in: ${user.uid}');
+        _logger.d('User email: ${user.email}');
+        _logger.d('Email verified: ${user.emailVerified}');
         
         // Check in Draft collection first (for new/in-progress registrations)
         _logger.d('Checking Draft collection for user with uid: ${user.uid}');
@@ -123,9 +125,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           final draftData = draftQuery.docs.first.data();
           final username = draftData['personalInfo']?['fullName'] ?? draftQuery.docs.first.id;
           _logger.i('User found in Draft collection: $username');
+          _logger.i('User has active session - navigating to RoleSelectionScreen');
           
           if (mounted) {
-            _logger.i('Navigating to RoleSelectionScreen');
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => const RoleSelectionScreen(),
@@ -147,9 +149,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           final employeeData = employeeQuery.docs.first.data();
           final username = employeeData['personalInfo']?['fullName'] ?? employeeQuery.docs.first.id;
           _logger.i('User found in EmployeeDetails collection: $username');
+          _logger.i('User has active session - navigating to RoleSelectionScreen');
           
           if (mounted) {
-            _logger.i('Navigating to RoleSelectionScreen');
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => const RoleSelectionScreen(),
@@ -160,18 +162,19 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         }
         
         // User logged in but no data found in either collection
-        _logger.w('User authenticated but no document found in Draft or EmployeeDetails. Signing out.');
+        _logger.w('User authenticated but no document found in Draft or EmployeeDetails.');
+        _logger.w('This might be a data inconsistency - signing out user.');
         await FirebaseAuth.instance.signOut();
         
         if (mounted) {
-          _logger.i('Navigating to LoginScreen after signout');
+          _logger.i('Navigating to WelcomeScreen after cleanup signout');
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const WelcomeScreen()),
           );
         }
       } else {
-        // No user logged in
-        _logger.i('No user logged in, navigating to LoginScreen');
+        // No user logged in - this is normal for first-time users
+        _logger.i('No authenticated user found - navigating to WelcomeScreen');
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const WelcomeScreen()),
@@ -182,9 +185,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       _logger.e('FirebaseAuthException during auth check', error: e, stackTrace: e.stackTrace);
       _logger.e('Error code: ${e.code}, Message: ${e.message}');
       
-      // On error, navigate to login screen
+      // On error, navigate to welcome screen
       if (mounted) {
-        _logger.i('Navigating to LoginScreen due to FirebaseAuthException');
+        _logger.i('Navigating to WelcomeScreen due to FirebaseAuthException');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const WelcomeScreen()),
         );
@@ -194,7 +197,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       _logger.e('Error code: ${e.code}, Message: ${e.message}');
       
       if (mounted) {
-        _logger.i('Navigating to LoginScreen due to FirebaseException');
+        _logger.i('Navigating to WelcomeScreen due to FirebaseException');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const WelcomeScreen()),
         );
@@ -202,9 +205,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     } catch (e, stackTrace) {
       _logger.e('Unexpected error during auth check', error: e, stackTrace: stackTrace);
       
-      // On error, navigate to login screen
+      // On error, navigate to welcome screen
       if (mounted) {
-        _logger.i('Navigating to LoginScreen due to unexpected error');
+        _logger.i('Navigating to WelcomeScreen due to unexpected error');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const WelcomeScreen()),
         );

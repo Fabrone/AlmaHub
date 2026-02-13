@@ -1,6 +1,8 @@
 import 'package:almahub/screens/authentication/login_screen.dart';
+//import 'package:almahub/screens/authentication/registration_screen.dart';
 import 'package:almahub/screens/recruitment/recruitment_portal_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -16,6 +18,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  
+  // Authentication state
+  User? _currentUser;
+  bool _isCheckingAuth = true;
 
   // Initialize logger
   final Logger _logger = Logger(
@@ -33,7 +39,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   void initState() {
     super.initState();
     _logger.i('WelcomeScreen initialized');
+    _initializeAnimations();
+    _setupAuthListener();
+  }
 
+  void _initializeAnimations() {
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
@@ -60,6 +70,35 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _logger.d('Animations initialized and started');
   }
 
+  void _setupAuthListener() {
+    _logger.i('Setting up Firebase auth state listener');
+    
+    // Listen to auth state changes
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      _logger.d('Auth state changed: ${user != null ? "User logged in (${user.uid})" : "No user"}');
+      
+      if (mounted) {
+        setState(() {
+          _currentUser = user;
+          _isCheckingAuth = false;
+        });
+        
+        if (user != null) {
+          _logger.i('User is authenticated: ${user.email}');
+        } else {
+          _logger.i('No authenticated user - showing guest options');
+        }
+      }
+    }, onError: (error) {
+      _logger.e('Auth state listener error', error: error);
+      if (mounted) {
+        setState(() {
+          _isCheckingAuth = false;
+        });
+      }
+    });
+  }
+
   @override
   void dispose() {
     _logger.d('WelcomeScreen disposing');
@@ -75,6 +114,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   }
+
+  /*void _navigateToRegistration() {
+    _logger.i('Navigating to Registration Screen');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const RegistrationScreen()),
+    );
+  }*/
 
   void _navigateToRecruitment() {
     _logger.i('Navigating to Recruitment Portal');
@@ -122,119 +169,30 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             // Logo
-                            Container(
-                              width: isSmallScreen ? 100 : 120,
-                              height: isSmallScreen ? 100 : 120,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF7B2CBF),
-                                    Color(0xFF5A189A),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(28),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
-                                    blurRadius: 25,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                Icons.business_center,
-                                size: isSmallScreen ? 50 : 60,
-                                color: Colors.white,
-                              ),
-                            ),
+                            _buildLogo(isSmallScreen),
 
                             SizedBox(height: screenHeight * 0.04),
 
                             // Welcome message
-                            Text(
-                              'Welcome to AlmaHub',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: isSmallScreen ? 26 : (isMediumScreen ? 30 : 34),
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF1A1A2E),
-                                letterSpacing: -0.5,
-                              ),
-                            ),
+                            _buildWelcomeMessage(isSmallScreen, isMediumScreen),
 
                             SizedBox(height: screenHeight * 0.015),
 
-                            Text(
-                              'Choose an option to get started',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: isSmallScreen ? 14 : 15,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            _buildSubtitle(isSmallScreen),
 
                             SizedBox(height: screenHeight * 0.05),
 
-                            // Action buttons container
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Login button
-                                _buildLoginButton(),
-
-                                const SizedBox(height: 20),
-
-                                // Divider
-                                Row(
-                                  children: [
-                                    const Expanded(
-                                      child: Divider(
-                                        color: Color(0xFFE2E8F0),
-                                        thickness: 1,
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                      child: Text(
-                                        'OR',
-                                        style: TextStyle(
-                                          color: const Color(0xFF64748B),
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ),
-                                    const Expanded(
-                                      child: Divider(
-                                        color: Color(0xFFE2E8F0),
-                                        thickness: 1,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 20),
-
-                                // Recruitment portal button
-                                _buildRecruitmentButton(),
-                              ],
-                            ),
+                            // Show loading indicator while checking auth
+                            if (_isCheckingAuth)
+                              _buildLoadingIndicator()
+                            else
+                              // Dynamic action buttons based on auth state
+                              _buildActionButtons(),
 
                             SizedBox(height: screenHeight * 0.04),
 
                             // Footer text
-                            Text(
-                              'JV Almacis - Italian Excellence, Global Reach',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: const Color(0xFF94A3B8),
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
+                            _buildFooter(),
                           ],
                         ),
                       ),
@@ -244,6 +202,225 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogo(bool isSmallScreen) {
+    return Container(
+      width: isSmallScreen ? 100 : 120,
+      height: isSmallScreen ? 100 : 120,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF7B2CBF),
+            Color(0xFF5A189A),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
+            blurRadius: 25,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.business_center,
+        size: isSmallScreen ? 50 : 60,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildWelcomeMessage(bool isSmallScreen, bool isMediumScreen) {
+    return Text(
+      _currentUser != null ? 'Welcome Back!' : 'Welcome to AlmaHub',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: isSmallScreen ? 26 : (isMediumScreen ? 30 : 34),
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFF1A1A2E),
+        letterSpacing: -0.5,
+      ),
+    );
+  }
+
+  Widget _buildSubtitle(bool isSmallScreen) {
+    return Text(
+      _currentUser != null 
+          ? 'Continue to your account'
+          : 'Choose an option to get started',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: isSmallScreen ? 14 : 15,
+        color: const Color(0xFF64748B),
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF7B2CBF),
+              ),
+              strokeWidth: 3,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Checking authentication...',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Show different buttons based on authentication state
+        if (_currentUser != null) ...[
+          // Authenticated user - show login button
+          _buildLoginButton(),
+          
+          const SizedBox(height: 20),
+          
+          // Divider
+          _buildDivider(),
+          
+          const SizedBox(height: 20),
+          
+          // Secondary option for recruitment
+          _buildRecruitmentButton(),
+        ] else ...[
+          // Non-authenticated user - show recruitment button prominently
+          _buildRecruitmentButton(),
+          
+          const SizedBox(height: 20),
+          
+          // Divider
+          _buildDivider(),
+          
+          const SizedBox(height: 20),
+          
+          // Login option for existing users
+          _buildExistingUserSection(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDivider() {
+    return Row(
+      children: [
+        const Expanded(
+          child: Divider(
+            color: Color(0xFFE2E8F0),
+            thickness: 1,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'OR',
+            style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        const Expanded(
+          child: Divider(
+            color: Color(0xFFE2E8F0),
+            thickness: 1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExistingUserSection() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 40,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Text(
+                'Already part of our team?',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF334155),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _navigateToLogin,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(
+                          color: Color(0xFF7B2CBF),
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7B2CBF),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -302,7 +479,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Employee Sign In',
+                        'Continue to Dashboard',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -311,7 +488,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Access your onboarding account',
+                        'Access your account',
                         style: TextStyle(
                           fontSize: 13,
                           color: const Color(0xFF64748B),
@@ -447,6 +624,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Text(
+      'JV Almacis - Italian Excellence, Global Reach',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 12,
+        color: const Color(0xFF94A3B8),
+        fontStyle: FontStyle.italic,
       ),
     );
   }
