@@ -1,4 +1,3 @@
-//import 'package:almahub/screens/authentication/login_screen.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/welcome_screen.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +20,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   late Animation<double> _logoAnimation;
   late Animation<double> _textFadeAnimation;
   late Animation<Offset> _textSlideAnimation;
-  late Animation<double> _progressAnimation;
   
   // Initialize logger
   final Logger _logger = Logger(
@@ -78,9 +76,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       vsync: this,
     );
 
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
-    );
 
     // Start animations
     _logoController.forward();
@@ -234,329 +229,260 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _logger.d('Building SplashScreen - Height: $screenHeight, Width: $screenWidth');
     
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.fromARGB(255, 66, 10, 113),
-              Color.fromARGB(255, 132, 69, 161),
-              Color.fromARGB(255, 95, 24, 150),
-              Color.fromARGB(255, 66, 10, 113),
-            ],
-            stops: [0.0, 0.3, 0.6, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Animated background elements
-              _buildBackgroundCircles(),
-              
-              // Main content - using LayoutBuilder for responsive design
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final availableHeight = constraints.maxHeight;
-                  final availableWidth = constraints.maxWidth;
-                  
-                  // Calculate responsive sizes based on screen dimensions
-                  final isSmallScreen = availableWidth < 360;
-                  final isMediumScreen = availableWidth >= 360 && availableWidth < 600;
-                  final isLargeScreen = availableWidth >= 600;
-                  
-                  // Adaptive sizing
-                  final logoSize = isSmallScreen 
-                      ? 50.0 
-                      : isMediumScreen 
-                          ? 60.0 
-                          : 70.0;
-                  
-                  final titleFontSize = isSmallScreen 
-                      ? 32.0 
-                      : isMediumScreen 
-                          ? 40.0 
-                          : 48.0;
-                  
-                  final subtitleFontSize = isSmallScreen 
-                      ? 13.0 
-                      : isMediumScreen 
-                          ? 15.0 
-                          : 16.0;
-                  
-                  final taglineFontSize = isSmallScreen 
-                      ? 11.0 
-                      : isMediumScreen 
-                          ? 12.0 
-                          : 13.0;
-                  
-                  return Center(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: availableHeight,
-                          maxWidth: isLargeScreen ? 600 : availableWidth,
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Subtle background decoration
+            _buildBackgroundDecoration(),
+            
+            // Main content - using LayoutBuilder for responsive design
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final availableHeight = constraints.maxHeight;
+                final availableWidth = constraints.maxWidth;
+                
+                // Calculate responsive sizes based on screen dimensions
+                final isSmallScreen = availableWidth < 360;
+                final isMediumScreen = availableWidth >= 360 && availableWidth < 600;
+                final isLargeScreen = availableWidth >= 600;
+                
+                // Adaptive sizing
+                final logoSize = isSmallScreen 
+                    ? 50.0 
+                    : isMediumScreen 
+                        ? 60.0 
+                        : 70.0;
+                
+                final titleFontSize = isSmallScreen 
+                    ? 32.0 
+                    : isMediumScreen 
+                        ? 40.0 
+                        : 48.0;
+                
+                final subtitleFontSize = isSmallScreen 
+                    ? 13.0 
+                    : isMediumScreen 
+                        ? 15.0 
+                        : 16.0;
+                
+                final taglineFontSize = isSmallScreen 
+                    ? 11.0 
+                    : isMediumScreen 
+                        ? 12.0 
+                        : 13.0;
+                
+                return Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: availableHeight,
+                        maxWidth: isLargeScreen ? 600 : availableWidth,
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: availableWidth * 0.08,
+                          vertical: availableHeight * 0.05,
                         ),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: availableWidth * 0.08,
-                            vertical: availableHeight * 0.05,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(height: availableHeight * 0.1),
-                              
-                              // Animated logo with improved design
-                              ScaleTransition(
-                                scale: _logoAnimation,
-                                child: Container(
-                                  padding: EdgeInsets.all(isSmallScreen ? 20 : 24),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.white.withValues(alpha: 0.25),
-                                        blurRadius: 30,
-                                        spreadRadius: 5,
-                                      ),
-                                      BoxShadow(
-                                        color: Colors.purple.withValues(alpha: 0.3),
-                                        blurRadius: 40,
-                                        spreadRadius: -5,
-                                      ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(height: availableHeight * 0.1),
+                            
+                            // Animated logo with modern design
+                            ScaleTransition(
+                              scale: _logoAnimation,
+                              child: Container(
+                                width: isSmallScreen ? 120 : (isMediumScreen ? 140 : 160),
+                                height: isSmallScreen ? 120 : (isMediumScreen ? 140 : 160),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFF7B2CBF),
+                                      Color(0xFF5A189A),
                                     ],
                                   ),
-                                  child: Container(
-                                    padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.1),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 5),
-                                        ),
-                                      ],
+                                  borderRadius: BorderRadius.circular(32),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
+                                      blurRadius: 30,
+                                      offset: const Offset(0, 10),
                                     ),
-                                    child: Icon(
-                                      Icons.business_center,
-                                      size: logoSize,
-                                      color: const Color.fromARGB(255, 66, 10, 113),
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 5),
                                     ),
-                                  ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.business_center,
+                                  size: logoSize,
+                                  color: Colors.white,
                                 ),
                               ),
-                              
-                              SizedBox(height: availableHeight * 0.05),
-                              
-                              // Animated company name
-                              FadeTransition(
-                                opacity: _textFadeAnimation,
-                                child: SlideTransition(
-                                  position: _textSlideAnimation,
-                                  child: Column(
-                                    children: [
-                                      ShaderMask(
-                                        shaderCallback: (bounds) => const LinearGradient(
-                                          colors: [
-                                            Colors.white,
-                                            Color(0xFFE1BEE7),
-                                            Colors.white,
-                                          ],
-                                          stops: [0.0, 0.5, 1.0],
-                                        ).createShader(bounds),
-                                        child: Text(
-                                          'JV Almacis',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: titleFontSize,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                            letterSpacing: 2,
-                                            height: 1.2,
-                                            shadows: const [
-                                              Shadow(
-                                                color: Colors.black26,
-                                                offset: Offset(0, 3),
-                                                blurRadius: 6,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      
-                                      SizedBox(height: availableHeight * 0.025),
-                                      
-                                      // Subtitle badge
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: isSmallScreen ? 16 : 20,
-                                          vertical: isSmallScreen ? 8 : 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(25),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.4),
-                                            width: 1.5,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: 0.1),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          'Employee Onboarding System',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: subtitleFontSize,
-                                            color: Colors.white.withValues(alpha: 0.95),
-                                            letterSpacing: 1.2,
-                                            fontWeight: FontWeight.w400,
-                                            height: 1.3,
-                                          ),
-                                        ),
-                                      ),
-                                      
-                                      SizedBox(height: availableHeight * 0.015),
-                                      
-                                      // Tagline
-                                      Text(
-                                        'Italian Excellence, Global Reach',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: taglineFontSize,
-                                          color: Colors.white.withValues(alpha: 0.75),
-                                          letterSpacing: 0.8,
-                                          fontStyle: FontStyle.italic,
-                                          fontWeight: FontWeight.w300,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              
-                              SizedBox(height: availableHeight * 0.12),
-                              
-                              // Animated loading indicator
-                              FadeTransition(
-                                opacity: _textFadeAnimation,
+                            ),
+                            
+                            SizedBox(height: availableHeight * 0.05),
+                            
+                            // Animated company name
+                            FadeTransition(
+                              opacity: _textFadeAnimation,
+                              child: SlideTransition(
+                                position: _textSlideAnimation,
                                 child: Column(
                                   children: [
-                                    SizedBox(
-                                      width: isSmallScreen ? 40 : 45,
-                                      height: isSmallScreen ? 40 : 45,
-                                      child: CircularProgressIndicator(
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white.withValues(alpha: 0.9),
-                                        ),
-                                        strokeWidth: 3,
+                                    Text(
+                                      'JV Almacis',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: titleFontSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF1A1A2E),
+                                        letterSpacing: -0.5,
+                                        height: 1.2,
                                       ),
                                     ),
+                                    
                                     SizedBox(height: availableHeight * 0.025),
+                                    
+                                    // Subtitle badge
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 16 : 20,
+                                        vertical: isSmallScreen ? 8 : 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF7B2CBF).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: const Color(0xFF7B2CBF).withValues(alpha: 0.2),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Employee Onboarding System',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: subtitleFontSize,
+                                          color: const Color(0xFF7B2CBF),
+                                          letterSpacing: 0.3,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ),
+                                    
+                                    SizedBox(height: availableHeight * 0.015),
+                                    
+                                    // Tagline
                                     Text(
-                                      'Loading your workspace...',
+                                      'Italian Excellence, Global Reach',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: taglineFontSize,
-                                        color: Colors.white.withValues(alpha: 0.8),
+                                        color: const Color(0xFF64748B),
                                         letterSpacing: 0.5,
-                                        fontWeight: FontWeight.w300,
+                                        fontStyle: FontStyle.italic,
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              
-                              SizedBox(height: availableHeight * 0.1),
-                            ],
-                          ),
+                            ),
+                            
+                            SizedBox(height: availableHeight * 0.12),
+                            
+                            // Animated loading indicator
+                            FadeTransition(
+                              opacity: _textFadeAnimation,
+                              child: Column(
+                                children: [
+                                  SizedBox(
+                                    width: isSmallScreen ? 40 : 45,
+                                    height: isSmallScreen ? 40 : 45,
+                                    child: CircularProgressIndicator(
+                                      valueColor: const AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF7B2CBF),
+                                      ),
+                                      strokeWidth: 3,
+                                    ),
+                                  ),
+                                  SizedBox(height: availableHeight * 0.025),
+                                  Text(
+                                    'Loading your workspace...',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: taglineFontSize,
+                                      color: const Color(0xFF64748B),
+                                      letterSpacing: 0.3,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            SizedBox(height: availableHeight * 0.1),
+                          ],
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-            ],
-          ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBackgroundCircles() {
+  Widget _buildBackgroundDecoration() {
     return Stack(
       children: [
-        // Top right circle
+        // Top right accent
         Positioned(
           top: -100,
           right: -100,
-          child: RotationTransition(
-            turns: _progressAnimation,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.08),
-                    Colors.purple.withValues(alpha: 0.05),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
-                ),
-              ),
-            ),
-          ),
-        ),
-        
-        // Bottom left circle
-        Positioned(
-          bottom: -150,
-          left: -150,
-          child: RotationTransition(
-            turns: Tween<double>(begin: 1.0, end: 0.0).animate(_progressController),
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.06),
-                    Colors.purple.withValues(alpha: 0.04),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
-                ),
-              ),
-            ),
-          ),
-        ),
-        
-        // Middle left circle
-        Positioned(
-          top: MediaQuery.of(context).size.height * 0.3,
-          left: -80,
           child: Container(
-            width: 200,
-            height: 200,
+            width: 300,
+            height: 300,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withValues(alpha: 0.04),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.05),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.02),
                   Colors.transparent,
                 ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+        ),
+        
+        // Bottom left accent
+        Positioned(
+          bottom: -150,
+          left: -150,
+          child: Container(
+            width: 400,
+            height: 400,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.04),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.02),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.5, 1.0],
               ),
             ),
           ),

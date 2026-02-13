@@ -94,51 +94,73 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _logger.d('Building WelcomeScreen - Width: $screenWidth, Height: $screenHeight');
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.fromARGB(255, 66, 10, 113),
-              Color.fromARGB(255, 132, 69, 161),
-              Color.fromARGB(255, 95, 24, 150),
-              Color.fromARGB(255, 66, 10, 113),
-            ],
-            stops: [0.0, 0.3, 0.6, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Animated background elements
-              _buildBackgroundCircles(),
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Subtle background decoration
+            _buildBackgroundDecoration(),
 
-              // Main content
-              Center(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.08,
-                          vertical: screenHeight * 0.05,
+            // Main content
+            Center(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.08,
+                        vertical: screenHeight * 0.05,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: isMediumScreen ? 500 : 600,
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            // Logo
+                            Container(
+                              width: isSmallScreen ? 100 : 120,
+                              height: isSmallScreen ? 100 : 120,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFF7B2CBF),
+                                    Color(0xFF5A189A),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
+                                    blurRadius: 25,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.business_center,
+                                size: isSmallScreen ? 50 : 60,
+                                color: Colors.white,
+                              ),
+                            ),
+
+                            SizedBox(height: screenHeight * 0.04),
+
                             // Welcome message
                             Text(
                               'Welcome to AlmaHub',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 24 : (isMediumScreen ? 28 : 32),
+                                fontSize: isSmallScreen ? 26 : (isMediumScreen ? 30 : 34),
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1,
+                                color: const Color(0xFF1A1A2E),
+                                letterSpacing: -0.5,
                               ),
                             ),
 
@@ -148,72 +170,71 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               'Choose an option to get started',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 14 : 16,
-                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: isSmallScreen ? 14 : 15,
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
 
                             SizedBox(height: screenHeight * 0.05),
 
                             // Action buttons container
-                            Container(
-                              constraints: BoxConstraints(
-                                maxWidth: isMediumScreen ? 400 : 500,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Login button
-                                  _buildActionButton(
-                                    icon: Icons.login,
-                                    label: 'Employee Sign In',
-                                    subtitle: 'Access your onboarding account',
-                                    onPressed: _navigateToLogin,
-                                    isPrimary: true,
-                                  ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Login button
+                                _buildLoginButton(),
 
-                                  const SizedBox(height: 24),
+                                const SizedBox(height: 20),
 
-                                  // Divider
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Divider(
-                                          color: Colors.white.withValues(alpha: 0.3),
-                                          thickness: 1,
+                                // Divider
+                                Row(
+                                  children: [
+                                    const Expanded(
+                                      child: Divider(
+                                        color: Color(0xFFE2E8F0),
+                                        thickness: 1,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      child: Text(
+                                        'OR',
+                                        style: TextStyle(
+                                          color: const Color(0xFF64748B),
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
                                         ),
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                                        child: Text(
-                                          'OR',
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.7),
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                          ),
-                                        ),
+                                    ),
+                                    const Expanded(
+                                      child: Divider(
+                                        color: Color(0xFFE2E8F0),
+                                        thickness: 1,
                                       ),
-                                      Expanded(
-                                        child: Divider(
-                                          color: Colors.white.withValues(alpha: 0.3),
-                                          thickness: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
+                                ),
 
-                                  const SizedBox(height: 24),
+                                const SizedBox(height: 20),
 
-                                  // Recruitment portal button
-                                  _buildRecruitmentButton(
-                                    onPressed: _navigateToRecruitment,
-                                  ),
-                                ],
-                              ),
+                                // Recruitment portal button
+                                _buildRecruitmentButton(),
+                              ],
                             ),
 
-                            SizedBox(height: screenHeight * 0.05),
+                            SizedBox(height: screenHeight * 0.04),
+
+                            // Footer text
+                            Text(
+                              'JV Almacis - Italian Excellence, Global Reach',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: const Color(0xFF94A3B8),
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -221,104 +242,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required VoidCallback onPressed,
-    required bool isPrimary,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary
-              ? Colors.white
-              : Colors.white.withValues(alpha: 0.15),
-          foregroundColor: isPrimary
-              ? const Color.fromARGB(255, 66, 10, 113)
-              : Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: isPrimary
-                  ? Colors.transparent
-                  : Colors.white.withValues(alpha: 0.3),
-              width: 2,
-            ),
-          ),
-          elevation: 0,
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isPrimary
-                    ? const Color.fromARGB(255, 66, 10, 113).withValues(alpha: 0.1)
-                    : Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                size: 28,
-                color: isPrimary
-                    ? const Color.fromARGB(255, 66, 10, 113)
-                    : Colors.white,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isPrimary
-                          ? const Color.fromARGB(255, 66, 10, 113)
-                          : Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isPrimary
-                          ? const Color.fromARGB(255, 66, 10, 113).withValues(alpha: 0.7)
-                          : Colors.white.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 20,
-              color: isPrimary
-                  ? const Color.fromARGB(255, 66, 10, 113).withValues(alpha: 0.6)
-                  : Colors.white.withValues(alpha: 0.6),
             ),
           ],
         ),
@@ -326,22 +249,20 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildRecruitmentButton({required VoidCallback onPressed}) {
+  Widget _buildLoginButton() {
     return Container(
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            Colors.orange.shade600,
-            Colors.deepOrange.shade700,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withValues(alpha: 0.4),
-            blurRadius: 15,
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 40,
             offset: const Offset(0, 8),
           ),
         ],
@@ -349,7 +270,94 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
+          onTap: _navigateToLogin,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF7B2CBF),
+                        Color(0xFF5A189A),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.login,
+                    size: 26,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Employee Sign In',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A2E),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Access your onboarding account',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 18,
+                  color: const Color(0xFF64748B).withValues(alpha: 0.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecruitmentButton() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFEA580C),
+            Color(0xFFC2410C),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEA580C).withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _navigateToRecruitment,
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -358,36 +366,38 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      width: 56,
+                      height: 56,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: const Icon(
                         Icons.work_outline,
-                        size: 32,
+                        size: 28,
                         color: Colors.white,
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Join Our Team',
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           Text(
                             'Submit your CV and application',
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 13,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -395,17 +405,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     ),
                     Icon(
                       Icons.arrow_forward_ios,
-                      size: 20,
+                      size: 18,
                       color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -413,15 +427,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       Icon(
                         Icons.info_outline,
                         size: 16,
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Colors.white.withValues(alpha: 0.95),
                       ),
                       const SizedBox(width: 8),
-                      Flexible(
+                      const Flexible(
                         child: Text(
                           'No account required - Just submit your CV',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.95),
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -436,10 +451,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildBackgroundCircles() {
+  Widget _buildBackgroundDecoration() {
     return Stack(
       children: [
-        // Top right circle
+        // Top right accent
         Positioned(
           top: -100,
           right: -100,
@@ -450,8 +465,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withValues(alpha: 0.08),
-                  Colors.purple.withValues(alpha: 0.05),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.05),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.02),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.5, 1.0],
@@ -460,7 +475,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ),
         ),
 
-        // Bottom left circle
+        // Bottom left accent
         Positioned(
           bottom: -150,
           left: -150,
@@ -471,8 +486,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withValues(alpha: 0.06),
-                  Colors.purple.withValues(alpha: 0.04),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.04),
+                  const Color(0xFF7B2CBF).withValues(alpha: 0.02),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.5, 1.0],
@@ -481,10 +496,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ),
         ),
 
-        // Middle circle
+        // Orange accent (for recruitment theme)
         Positioned(
-          top: MediaQuery.of(context).size.height * 0.3,
-          left: -80,
+          bottom: 100,
+          right: -80,
           child: Container(
             width: 200,
             height: 200,
@@ -492,7 +507,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withValues(alpha: 0.04),
+                  const Color(0xFFEA580C).withValues(alpha: 0.03),
                   Colors.transparent,
                 ],
               ),
