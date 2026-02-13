@@ -1,5 +1,6 @@
-import 'package:almahub/screens/authentication/login_screen.dart';
+//import 'package:almahub/screens/authentication/login_screen.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
+import 'package:almahub/screens/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -170,7 +171,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         if (mounted) {
           _logger.i('Navigating to LoginScreen after signout');
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
           );
         }
       } else {
@@ -178,7 +179,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         _logger.i('No user logged in, navigating to LoginScreen');
         if (mounted) {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
           );
         }
       }
@@ -190,7 +191,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (mounted) {
         _logger.i('Navigating to LoginScreen due to FirebaseAuthException');
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
         );
       }
     } on FirebaseException catch (e) {
@@ -200,7 +201,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (mounted) {
         _logger.i('Navigating to LoginScreen due to FirebaseException');
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
         );
       }
     } catch (e, stackTrace) {
@@ -210,7 +211,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (mounted) {
         _logger.i('Navigating to LoginScreen due to unexpected error');
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
         );
       }
     }
