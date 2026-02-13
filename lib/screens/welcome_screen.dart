@@ -1,5 +1,4 @@
 import 'package:almahub/screens/authentication/login_screen.dart';
-import 'package:almahub/screens/authentication/registration_screen.dart';
 import 'package:almahub/screens/recruitment/recruitment_portal_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
@@ -77,14 +76,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  void _navigateToSignup() {
-    _logger.i('Navigating to Registration Screen');
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const RegistrationScreen()),
-    );
-  }
-
   void _navigateToRecruitment() {
     _logger.i('Navigating to Recruitment Portal');
     Navigator.push(
@@ -139,130 +130,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Logo/Icon
-                            Container(
-                              padding: EdgeInsets.all(isSmallScreen ? 20 : 24),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.white.withValues(alpha: 0.25),
-                                    blurRadius: 30,
-                                    spreadRadius: 5,
-                                  ),
-                                  BoxShadow(
-                                    color: Colors.purple.withValues(alpha: 0.3),
-                                    blurRadius: 40,
-                                    spreadRadius: -5,
-                                  ),
-                                ],
-                              ),
-                              child: Container(
-                                padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 5),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  Icons.business_center,
-                                  size: isSmallScreen ? 50 : (isMediumScreen ? 60 : 70),
-                                  color: const Color.fromARGB(255, 66, 10, 113),
-                                ),
-                              ),
-                            ),
-
-                            SizedBox(height: screenHeight * 0.04),
-
-                            // Company name
-                            ShaderMask(
-                              shaderCallback: (bounds) => const LinearGradient(
-                                colors: [
-                                  Colors.white,
-                                  Color(0xFFE1BEE7),
-                                  Colors.white,
-                                ],
-                                stops: [0.0, 0.5, 1.0],
-                              ).createShader(bounds),
-                              child: Text(
-                                'JV Almacis',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 32 : (isMediumScreen ? 40 : 48),
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 2,
-                                  height: 1.2,
-                                  shadows: const [
-                                    Shadow(
-                                      color: Colors.black26,
-                                      offset: Offset(0, 3),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            SizedBox(height: screenHeight * 0.02),
-
-                            // Subtitle
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isSmallScreen ? 16 : 20,
-                                vertical: isSmallScreen ? 8 : 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(25),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.4),
-                                  width: 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Text(
-                                'Employee Onboarding System',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: isSmallScreen ? 13 : (isMediumScreen ? 15 : 16),
-                                  color: Colors.white.withValues(alpha: 0.95),
-                                  letterSpacing: 1.2,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ),
-
-                            SizedBox(height: screenHeight * 0.01),
-
-                            // Tagline
-                            Text(
-                              'Italian Excellence, Global Reach',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: isSmallScreen ? 11 : (isMediumScreen ? 12 : 13),
-                                color: Colors.white.withValues(alpha: 0.75),
-                                letterSpacing: 0.8,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w300,
-                              ),
-                            ),
-
-                            SizedBox(height: screenHeight * 0.06),
-
                             // Welcome message
                             Text(
                               'Welcome to AlmaHub',
@@ -299,21 +166,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                   // Login button
                                   _buildActionButton(
                                     icon: Icons.login,
-                                    label: 'Sign In',
-                                    subtitle: 'Access your account',
+                                    label: 'Employee Sign In',
+                                    subtitle: 'Access your onboarding account',
                                     onPressed: _navigateToLogin,
                                     isPrimary: true,
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  // Sign up button
-                                  _buildActionButton(
-                                    icon: Icons.person_add,
-                                    label: 'Create Account',
-                                    subtitle: 'Join our onboarding platform',
-                                    onPressed: _navigateToSignup,
-                                    isPrimary: false,
                                   ),
 
                                   const SizedBox(height: 24),
@@ -528,7 +384,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Submit your application',
+                            'Submit your CV and application',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.white.withValues(alpha: 0.9),
