@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
+import 'package:almahub/screens/authentication/registration_screen.dart';
 
 class RecruitmentStatusScreen extends StatefulWidget {
   final String recruiteeEmail;
@@ -182,6 +183,16 @@ class _RecruitmentStatusScreenState extends State<RecruitmentStatusScreen>
         ),
       );
     }
+  }
+
+  void _navigateToRegistration() {
+    _logger.i('Navigating to registration screen');
+    
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => const RegistrationScreen(),
+      ),
+    );
   }
 
   @override
@@ -428,15 +439,15 @@ class _RecruitmentStatusScreenState extends State<RecruitmentStatusScreen>
     );
   }
 
-  // Status: accepted - Final acceptance
+  // Status: accepted - Final acceptance with registration guidance
   Widget _buildAcceptedView(String fullName) {
     return _buildStatusCard(
       icon: Icons.celebration_rounded,
       iconColor: const Color(0xFF10B981),
-      title: 'Welcome to JV Almacis!',
-      subtitle: 'Your application has been accepted',
+      title: '🎉 Congratulations $fullName!',
+      subtitle: 'Your application has been accepted!',
       description:
-          'Congratulations! You\'re now part of our team. Please check your email for onboarding instructions.',
+          'Welcome to JV Almacis! We\'re excited to have you join our team. Your application has been approved and you\'re now ready for the next step.',
       statusBadge: 'Accepted',
       statusColor: const Color(0xFF10B981),
       timeline: [
@@ -446,28 +457,129 @@ class _RecruitmentStatusScreenState extends State<RecruitmentStatusScreen>
       ],
       showPulse: false,
       additionalInfo:
-          'Next Steps:\n• Check your email for onboarding details\n• Complete required documentation\n• Prepare for your start date',
-      actions: [
-        _buildActionButton(
-          label: 'View Onboarding Guide',
-          icon: Icons.arrow_forward,
-          color: const Color(0xFF7B2CBF),
-          onPressed: () {
-            // Future: Navigate to onboarding screen
-            // This will be implemented when onboarding module is ready
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Onboarding process will be available soon'),
-                behavior: SnackBarBehavior.floating,
+          '🎯 Next Step: Complete Your Registration\n\n'
+          'To proceed with onboarding and gain access to your employee account, you need to:\n\n'
+          '1. Create your account credentials\n'
+          '2. Set up your employee profile\n'
+          '3. Complete onboarding documentation\n\n'
+          'Click the button below to begin your registration process.',
+      customAction: _buildRegistrationPrompt(fullName),
+    );
+  }
+
+  // NEW METHOD: Build registration prompt card
+  Widget _buildRegistrationPrompt(String fullName) {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF7B2CBF),
+                Color(0xFF5A189A),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
               ),
-            );
-          },
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.how_to_reg_rounded,
+                  size: 36,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Ready to Get Started?',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Complete your registration to access your employee dashboard and begin your journey with us.',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.white,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: _navigateToRegistration,
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 24),
+                  label: const Text(
+                    'Proceed to Registration',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF7B2CBF),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 16,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Takes about 5 minutes',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  // Status: rejected - Final rejection → Changed to "Application Unsuccessful"
+  // Status: rejected - Final rejection
   Widget _buildRejectedView(String fullName) {
     return _buildStatusCard(
       icon: Icons.info_outline,
@@ -515,6 +627,7 @@ class _RecruitmentStatusScreenState extends State<RecruitmentStatusScreen>
     required bool showPulse,
     String? additionalInfo,
     List<Widget>? actions,
+    Widget? customAction, // NEW: For registration prompt
   }) {
     return Center(
       child: SingleChildScrollView(
@@ -639,6 +752,12 @@ class _RecruitmentStatusScreenState extends State<RecruitmentStatusScreen>
                               ],
                             ),
                           ),
+                        ],
+
+                        // Custom action (registration prompt)
+                        if (customAction != null) ...[
+                          const SizedBox(height: 20),
+                          customAction,
                         ],
                       ],
                     ),
