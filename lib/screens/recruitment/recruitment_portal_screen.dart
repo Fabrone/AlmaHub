@@ -405,7 +405,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                 Navigator.of(context).pop(); // Return to welcome screen
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEA580C),
+                backgroundColor: const Color(0xFF7B2CBF),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -604,8 +604,8 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color(0xFFEA580C),
-            Color(0xFFC2410C),
+            Color(0xFF7B2CBF),
+            Color(0xFF5A189A),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -613,7 +613,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFEA580C).withValues(alpha: 0.3),
+            color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -716,7 +716,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(
-                color: Color(0xFFEA580C),
+                color: Color(0xFF7B2CBF),
                 width: 2,
               ),
             ),
@@ -774,12 +774,12 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEA580C).withValues(alpha: 0.1),
+                  color: const Color(0xFF7B2CBF).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.upload_file,
-                  color: Color(0xFFEA580C),
+                  color: Color(0xFF7B2CBF),
                   size: 24,
                 ),
               ),
@@ -884,9 +884,9 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                   ? 'Change CV'
                   : 'Select CV File'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFEA580C),
+                foregroundColor: const Color(0xFF7B2CBF),
                 side: const BorderSide(
-                  color: Color(0xFFEA580C),
+                  color: Color(0xFF7B2CBF),
                   width: 1.5,
                 ),
                 shape: RoundedRectangleBorder(
@@ -943,7 +943,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
             ? null
             : _submitApplication,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFEA580C),
+          backgroundColor: const Color(0xFF7B2CBF),
           foregroundColor: Colors.white,
           disabledBackgroundColor: const Color(0xFFE2E8F0),
           disabledForegroundColor: const Color(0xFF94A3B8),

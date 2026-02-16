@@ -1,5 +1,4 @@
 import 'package:almahub/screens/authentication/login_screen.dart';
-//import 'package:almahub/screens/authentication/registration_screen.dart';
 import 'package:almahub/screens/recruitment/recruitment_portal_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -517,15 +516,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         borderRadius: BorderRadius.circular(16),
         gradient: const LinearGradient(
           colors: [
-            Color(0xFFEA580C),
-            Color(0xFFC2410C),
+            Color(0xFF9333EA),
+            Color(0xFF7B2CBF),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFEA580C).withValues(alpha: 0.3),
+            color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -685,7 +684,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ),
         ),
 
-        // Orange accent (for recruitment theme)
+        // Purple accent (for recruitment theme)
         Positioned(
           bottom: 100,
           right: -80,
@@ -696,7 +695,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  const Color(0xFFEA580C).withValues(alpha: 0.03),
+                  const Color(0xFF9333EA).withValues(alpha: 0.03),
                   Colors.transparent,
                 ],
               ),
