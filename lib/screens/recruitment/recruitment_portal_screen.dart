@@ -3,6 +3,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:logger/logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'recruitment_status_screen.dart';
 
 class RecruitmentPortalScreen extends StatefulWidget {
   const RecruitmentPortalScreen({super.key});
@@ -20,6 +22,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
 
   bool _isSubmitting = false;
   bool _isUploadingFile = false;
+  bool _isCheckingExisting = false;
   String? _cvFileName;
   PlatformFile? _selectedCvFile;
   String? _errorMessage;
@@ -54,6 +57,54 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
 
     _fadeController.forward();
     _logger.d('Animation initialized and started');
+    
+    // Check if user has already submitted
+    _checkForExistingSubmission();
+  }
+
+  Future<void> _checkForExistingSubmission() async {
+    _logger.i('Checking for existing submission from this device');
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('recruitment_email');
+      
+      if (savedEmail != null && savedEmail.isNotEmpty) {
+        _logger.i('Found saved email: $savedEmail - checking Firestore');
+        
+        final sanitizedEmail = _sanitizeEmail(savedEmail);
+        final doc = await FirebaseFirestore.instance
+            .collection('Recruitees')
+            .doc(sanitizedEmail)
+            .get();
+        
+        if (doc.exists) {
+          _logger.i('Existing application found - redirecting to status screen');
+          
+          if (mounted) {
+            // Navigate directly to status screen
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => RecruitmentStatusScreen(
+                  recruiteeEmail: savedEmail,
+                  sanitizedEmail: sanitizedEmail,
+                ),
+              ),
+            );
+          }
+        } else {
+          _logger.d('Saved email found but no document exists - allowing new submission');
+          // Clear old saved email
+          await prefs.remove('recruitment_email');
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.e('Error checking existing submission', error: e, stackTrace: stackTrace);
+    }
+  }
+
+  String _sanitizeEmail(String email) {
+    return email.replaceAll('.', '_').replaceAll('@', '_at_');
   }
 
   @override
@@ -220,6 +271,174 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
     }
   }
 
+  Future<bool> _checkExistingApplication(String email) async {
+    _logger.i('Checking if application already exists for: $email');
+    
+    setState(() => _isCheckingExisting = true);
+    
+    try {
+      final sanitizedEmail = _sanitizeEmail(email);
+      
+      final doc = await FirebaseFirestore.instance
+          .collection('Recruitees')
+          .doc(sanitizedEmail)
+          .get();
+      
+      if (doc.exists) {
+        _logger.w('⚠️ Application already exists for this email');
+        
+        final data = doc.data();
+        final status = data?['status'] as String? ?? 'unknown';
+        final fullName = data?['fullName'] as String? ?? 'applicant';
+        
+        _logger.d('Existing application status: $status');
+        
+        if (mounted) {
+          // Show dialog informing user
+          await _showExistingApplicationDialog(fullName, status, sanitizedEmail);
+        }
+        
+        return true; // Application exists
+      }
+      
+      _logger.i('✅ No existing application found - can proceed');
+      return false; // No existing application
+      
+    } catch (e, stackTrace) {
+      _logger.e('Error checking existing application', error: e, stackTrace: stackTrace);
+      // On error, allow submission to proceed
+      return false;
+    } finally {
+      setState(() => _isCheckingExisting = false);
+    }
+  }
+
+  Future<void> _showExistingApplicationDialog(
+      String fullName, String status, String sanitizedEmail) async {
+    final statusMessages = {
+      'pending': 'Your application is awaiting review',
+      'under_review': 'Your application is currently being reviewed',
+      'shortlisted': 'Congratulations! You\'ve been shortlisted',
+      'not_shortlisted': 'Your application was not shortlisted for this round',
+      'accepted': 'Congratulations! Your application was accepted',
+      'rejected': 'Your previous application was not selected',
+    };
+    
+    final message = statusMessages[status] ?? 'You already have an application on file';
+    
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: const Color(0xFF7B2CBF),
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Application Already Submitted',
+                style: TextStyle(fontSize: 20),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Hi $fullName,',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'We found an existing application submitted with this email address.',
+              style: TextStyle(
+                fontSize: 15,
+                color: const Color(0xFF64748B),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7B2CBF).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: const Color(0xFF7B2CBF),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1A1A2E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Would you like to check your application status?',
+              style: TextStyle(
+                fontSize: 14,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Navigate to status screen
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => RecruitmentStatusScreen(
+                    recruiteeEmail: _emailController.text.trim(),
+                    sanitizedEmail: sanitizedEmail,
+                  ),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B2CBF),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('View Status'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitApplication() async {
     _logger.i('=== APPLICATION SUBMISSION INITIATED ===');
 
@@ -236,13 +455,20 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
       return;
     }
 
+    final email = _emailController.text.trim();
+    final fullName = _fullNameController.text.trim();
+
+    // Check for existing application
+    final exists = await _checkExistingApplication(email);
+    if (exists) {
+      _logger.i('Existing application found - stopping submission');
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
     });
-
-    final fullName = _fullNameController.text.trim();
-    final email = _emailController.text.trim();
 
     _logger.i('Submitting application for: $fullName ($email)');
 
@@ -261,35 +487,47 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
       // Step 2: Save recruitee data to Firestore
       _logger.d('Step 2: Saving recruitee data to Firestore');
 
+      final sanitizedEmail = _sanitizeEmail(email);
+
       final recruiteeData = {
         'fullName': fullName,
         'email': email,
         'cvUrl': cvUrl,
         'cvFileName': _cvFileName,
         'submittedAt': FieldValue.serverTimestamp(),
-        'status': 'pending', // pending, reviewed, shortlisted, rejected
+        'status': 'pending',
         'reviewedAt': null,
         'reviewNotes': null,
       };
 
       _logger.d('Recruitee data prepared');
       _logger.d('Data keys: ${recruiteeData.keys.toList()}');
-
-      // Use email as document ID to prevent duplicate submissions
-      final sanitizedEmail = email.replaceAll('.', '_').replaceAll('@', '_at_');
       _logger.d('Document ID: $sanitizedEmail');
 
       _logger.i('Saving to Firestore...');
       await FirebaseFirestore.instance
           .collection('Recruitees')
           .doc(sanitizedEmail)
-          .set(recruiteeData, SetOptions(merge: true));
+          .set(recruiteeData, SetOptions(merge: false)); // Don't merge, create new
 
       _logger.i('✅ APPLICATION SUBMITTED SUCCESSFULLY');
 
-      // Step 3: Show success dialog
+      // Step 3: Save email to local storage to prevent re-submission
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('recruitment_email', email);
+      _logger.d('Email saved to local storage for duplicate prevention');
+
+      // Step 4: Navigate to status screen
       if (mounted) {
-        await _showSuccessDialog();
+        _logger.i('Navigating to Recruitment Status Screen');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => RecruitmentStatusScreen(
+              recruiteeEmail: email,
+              sanitizedEmail: sanitizedEmail,
+            ),
+          ),
+        );
       }
     } on FirebaseException catch (e, stackTrace) {
       _logger.e('❌ FIREBASE ERROR during submission',
@@ -314,118 +552,6 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
       }
       _logger.d('=== APPLICATION SUBMISSION COMPLETED ===');
     }
-  }
-
-  Future<void> _showSuccessDialog() async {
-    _logger.i('Showing success dialog');
-
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        backgroundColor: Colors.white,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_circle,
-                size: 60,
-                color: Color(0xFF10B981),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Application Submitted!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Thank you for your interest in joining JV Almacis. Our recruitment team will review your application and contact you soon.',
-              style: TextStyle(
-                fontSize: 15,
-                color: Color(0xFF64748B),
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
-                ),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.email_outlined,
-                    color: Color(0xFF3B82F6),
-                    size: 20,
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Check your email for confirmation',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF3B82F6),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                _logger.i('Closing success dialog and returning to previous screen');
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Return to welcome screen
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7B2CBF),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Done',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      ),
-    );
   }
 
   @override
@@ -646,7 +772,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
           ),
           const SizedBox(height: 12),
           const Text(
-            'Submit your application by filling in your details and uploading your CV. No account required!',
+            'Submit your application by filling in your details and uploading your CV. One application per email address.',
             style: TextStyle(
               fontSize: 15,
               color: Colors.white,
@@ -874,7 +1000,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
           SizedBox(
             height: 48,
             child: OutlinedButton.icon(
-              onPressed: _isUploadingFile || _isSubmitting
+              onPressed: _isUploadingFile || _isSubmitting || _isCheckingExisting
                   ? null
                   : _selectCvFile,
               icon: Icon(_cvFileName != null
@@ -936,12 +1062,12 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
   }
 
   Widget _buildSubmitButton(bool isSmallScreen) {
+    final isLoading = _isSubmitting || _isUploadingFile || _isCheckingExisting;
+    
     return SizedBox(
       height: isSmallScreen ? 52 : 56,
       child: ElevatedButton(
-        onPressed: _isSubmitting || _isUploadingFile
-            ? null
-            : _submitApplication,
+        onPressed: isLoading ? null : _submitApplication,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF7B2CBF),
           foregroundColor: Colors.white,
@@ -952,7 +1078,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
           ),
           elevation: 0,
         ),
-        child: _isSubmitting || _isUploadingFile
+        child: isLoading
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -966,9 +1092,11 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    _isUploadingFile
-                        ? 'Uploading CV...'
-                        : 'Submitting...',
+                    _isCheckingExisting
+                        ? 'Checking...'
+                        : (_isUploadingFile
+                            ? 'Uploading CV...'
+                            : 'Submitting...'),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -1016,7 +1144,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Your information is secure and will only be used for recruitment purposes.',
+              'Your information is secure and will only be used for recruitment purposes. One application per email address.',
               style: TextStyle(
                 fontSize: 12,
                 color: const Color(0xFF475569),

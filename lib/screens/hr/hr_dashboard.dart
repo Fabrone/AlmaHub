@@ -1,4 +1,5 @@
 import 'package:almahub/models/employee_onboarding_models.dart';
+import 'package:almahub/screens/hr/hr_recruitment_dashboard.dart';
 import 'package:almahub/services/excel_download_service.dart';
 import 'package:almahub/services/excel_generation_service.dart';
 import 'package:flutter/material.dart';
@@ -68,6 +69,21 @@ class _HRDashboardState extends State<HRDashboard> {
               _showSearchDialog();
             },
             tooltip: 'Search Employees',
+          ),
+          const SizedBox(width: 8),
+
+          IconButton(
+            icon: const Icon(Icons.work_outline, color: Color.fromARGB(255, 242, 241, 243)),
+            onPressed: () {
+              _logger.i('Navigating to Recruitment Dashboard');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HRRecruitmentDashboard(),
+                ),
+              );
+            },
+            tooltip: 'Recruitment Portal',
           ),
           const SizedBox(width: 8),
         ],
