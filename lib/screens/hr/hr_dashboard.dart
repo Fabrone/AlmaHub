@@ -641,14 +641,17 @@ class _HRDashboardState extends State<HRDashboard> {
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.visibility, size: 20),
-                                        onPressed: () {
-                                          _logger.i('View button clicked for employee: ${doc.id}');
-                                          _viewEmployee(doc.id);
-                                        },
-                                        tooltip: 'View Details',
-                                      ),
+                                      // Delete Button (only for drafts)
+                                      if (_statusFilter == 'draft')
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                                          onPressed: () {
+                                            _logger.i('Delete button clicked for employee: ${doc.id}');
+                                            _deleteEmployee(doc.id, data);
+                                          },
+                                          tooltip: 'Remove User',
+                                        ),
+                                      // Approve/Reject buttons (only for submitted status)
                                       if (_statusFilter == 'submitted' && data['status'] == 'submitted') ...[
                                         IconButton(
                                           icon: const Icon(Icons.check_circle, size: 20, color: Colors.green),
@@ -852,6 +855,117 @@ class _HRDashboardState extends State<HRDashboard> {
     );
   }
 
+  Future<void> _deleteEmployee(String id, Map<String, dynamic> data) async {
+    _logger.i('=== DELETE EMPLOYEE INITIATED ===');
+    _logger.d('Employee ID: $id');
+    _logger.d('Collection: ${_getCollectionName()}');
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Remove User')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to remove this User?',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Employee: ${data['personalInfo']?['fullName'] ?? 'Unknown'}',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.red, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'This action cannot be undone.',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _logger.d('Delete cancelled by user');
+              Navigator.pop(context, false);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _logger.d('Delete confirmed by user');
+              Navigator.pop(context, true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        _logger.i('Deleting employee draft...');
+        _logger.d('Collection: ${_getCollectionName()}, Document ID: $id');
+        
+        await _firestore.collection(_getCollectionName()).doc(id).delete();
+        
+        _logger.i('✅ Employee draft deleted successfully');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Draft deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e, stackTrace) {
+        _logger.e('❌ ERROR DELETING EMPLOYEE', error: e, stackTrace: stackTrace);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting draft: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } else {
+      _logger.d('Delete cancelled by user');
+    }
+  }
+
   Future<void> _downloadExcel() async {
     _logger.i('=== EXCEL DOWNLOAD INITIATED ===');
     _logger.d('Current filter: $_statusFilter');
@@ -1008,28 +1122,6 @@ class _HRDashboardState extends State<HRDashboard> {
     }
   }
 
-  void _viewEmployee(String id) {
-    _logger.i('=== VIEW EMPLOYEE DETAILS ===');
-    _logger.d('Employee ID: $id');
-    _logger.d('Collection: ${_getCollectionName()}');
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Employee Details'),
-        content: const Text('Detail view will be implemented here'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _logger.d('Closing employee details dialog');
-              Navigator.pop(context);
-            },
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _approveEmployee(String id) async {
     _logger.i('=== APPROVE EMPLOYEE INITIATED ===');
