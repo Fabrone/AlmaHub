@@ -1,3 +1,4 @@
+import 'package:almahub/screens/authentication/login_screen.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/welcome_screen.dart';
 import 'package:flutter/material.dart';
@@ -13,15 +14,15 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _textController;
   late AnimationController _progressController;
   late Animation<double> _logoAnimation;
   late Animation<double> _textFadeAnimation;
   late Animation<Offset> _textSlideAnimation;
-  
-  // Initialize logger
+
   final Logger _logger = Logger(
     printer: PrettyPrinter(
       methodCount: 2,
@@ -43,8 +44,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   void _initializeAnimations() {
     _logger.d('Initializing animations');
-    
-    // Logo animation controller
+
     _logoController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -55,7 +55,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       curve: Curves.elasticOut,
     );
 
-    // Text animation controller
     _textController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -68,16 +67,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _textSlideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _textController, curve: Curves.easeOut));
+    ).animate(
+        CurvedAnimation(parent: _textController, curve: Curves.easeOut));
 
-    // Progress indicator controller
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
 
-
-    // Start animations
     _logoController.forward();
     Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -93,10 +90,18 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     });
   }
 
+  /// Main auth routing logic:
+  ///
+  /// 1. No Firebase Auth user → WelcomeScreen
+  /// 2. Auth user found, exists in Users collection → LoginScreen
+  ///    (they are a registered employee; force re-login for security)
+  /// 3. Auth user found, exists in Draft/EmployeeDetails → RoleSelectionScreen
+  ///    (they are mid-onboarding or fully onboarded admins)
+  /// 4. Auth user found but no matching Firestore document → sign out → WelcomeScreen
   Future<void> _checkAuthStatus() async {
     _logger.i('Starting authentication status check');
-    
-    // Extended wait for animations to play - increased from 3 to 5 seconds
+
+    // Allow animations to play
     await Future.delayed(const Duration(seconds: 5));
 
     if (!mounted) {
@@ -105,119 +110,106 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     }
 
     try {
-      _logger.d('Checking current user authentication state');
       final user = FirebaseAuth.instance.currentUser;
 
-      if (user != null) {
-        _logger.i('User is logged in: ${user.uid}');
-        _logger.d('User email: ${user.email}');
-        _logger.d('Email verified: ${user.emailVerified}');
-        
-        // Check in Draft collection first (for new/in-progress registrations)
-        _logger.d('Checking Draft collection for user with uid: ${user.uid}');
-        final draftQuery = await FirebaseFirestore.instance
-            .collection('Draft')
-            .where('uid', isEqualTo: user.uid)
-            .limit(1)
-            .get();
-
-        if (draftQuery.docs.isNotEmpty) {
-          final draftData = draftQuery.docs.first.data();
-          final username = draftData['personalInfo']?['fullName'] ?? draftQuery.docs.first.id;
-          _logger.i('User found in Draft collection: $username');
-          _logger.i('User has active session - navigating to RoleSelectionScreen');
-          
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const RoleSelectionScreen(),
-              ),
-            );
-          }
-          return;
-        }
-        _logger.d('User not found in Draft collection, checking EmployeeDetails');
-
-        // Check in EmployeeDetails collection (for completed profiles)
-        final employeeQuery = await FirebaseFirestore.instance
-            .collection('EmployeeDetails')
-            .where('uid', isEqualTo: user.uid)
-            .limit(1)
-            .get();
-
-        if (employeeQuery.docs.isNotEmpty) {
-          final employeeData = employeeQuery.docs.first.data();
-          final username = employeeData['personalInfo']?['fullName'] ?? employeeQuery.docs.first.id;
-          _logger.i('User found in EmployeeDetails collection: $username');
-          _logger.i('User has active session - navigating to RoleSelectionScreen');
-          
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const RoleSelectionScreen(),
-              ),
-            );
-          }
-          return;
-        }
-        
-        // User logged in but no data found in either collection
-        _logger.w('User authenticated but no document found in Draft or EmployeeDetails.');
-        _logger.w('This might be a data inconsistency - signing out user.');
-        await FirebaseAuth.instance.signOut();
-        
-        if (mounted) {
-          _logger.i('Navigating to WelcomeScreen after cleanup signout');
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-          );
-        }
-      } else {
-        // No user logged in - this is normal for first-time users
-        _logger.i('No authenticated user found - navigating to WelcomeScreen');
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-          );
-        }
+      if (user == null) {
+        _logger.i('No authenticated user — navigating to WelcomeScreen');
+        _navigateTo(const WelcomeScreen());
+        return;
       }
+
+      _logger.i('Authenticated user found: uid=${user.uid}, email=${user.email}');
+
+      // ── Check 1: Users collection (registered employees) ──────────────────
+      _logger.d('Checking Users collection for uid: ${user.uid}');
+      final usersQuery = await FirebaseFirestore.instance
+          .collection('Users')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (usersQuery.docs.isNotEmpty) {
+        final userData = usersQuery.docs.first.data();
+        final role = userData['role'] as String?;
+        _logger.i('User found in Users collection — role: $role');
+
+        if (role == 'Admin') {
+          // Admin goes straight to RoleSelectionScreen
+          _logger.i('Admin user — navigating to RoleSelectionScreen');
+          _navigateTo(const RoleSelectionScreen());
+        } else {
+          // Regular registered user → show LoginScreen so they authenticate
+          // fresh (avoids session confusion after a recruitment flow).
+          _logger.i('Registered user (non-Admin) — navigating to LoginScreen');
+          _navigateTo(const LoginScreen());
+        }
+        return;
+      }
+
+      // ── Check 2: Draft collection (mid-onboarding) ────────────────────────
+      _logger.d('Checking Draft collection for uid: ${user.uid}');
+      final draftQuery = await FirebaseFirestore.instance
+          .collection('Draft')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (draftQuery.docs.isNotEmpty) {
+        final draftData = draftQuery.docs.first.data();
+        final username =
+            draftData['personalInfo']?['fullName'] ?? draftQuery.docs.first.id;
+        _logger.i('User found in Draft collection: $username — navigating to RoleSelectionScreen');
+        _navigateTo(const RoleSelectionScreen());
+        return;
+      }
+
+      // ── Check 3: EmployeeDetails collection (completed onboarding) ─────────
+      _logger.d('Checking EmployeeDetails collection for uid: ${user.uid}');
+      final employeeQuery = await FirebaseFirestore.instance
+          .collection('EmployeeDetails')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (employeeQuery.docs.isNotEmpty) {
+        final employeeData = employeeQuery.docs.first.data();
+        final username = employeeData['personalInfo']?['fullName'] ??
+            employeeQuery.docs.first.id;
+        _logger.i('User found in EmployeeDetails: $username — navigating to RoleSelectionScreen');
+        _navigateTo(const RoleSelectionScreen());
+        return;
+      }
+
+      // ── No matching Firestore document — clean up and go to WelcomeScreen ──
+      _logger.w(
+          'Authenticated user has no matching Firestore document — signing out');
+      await FirebaseAuth.instance.signOut();
+      _navigateTo(const WelcomeScreen());
     } on FirebaseAuthException catch (e) {
-      _logger.e('FirebaseAuthException during auth check', error: e, stackTrace: e.stackTrace);
-      _logger.e('Error code: ${e.code}, Message: ${e.message}');
-      
-      // On error, navigate to welcome screen
-      if (mounted) {
-        _logger.i('Navigating to WelcomeScreen due to FirebaseAuthException');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-        );
-      }
+      _logger.e('FirebaseAuthException during auth check',
+          error: e, stackTrace: e.stackTrace);
+      _navigateTo(const WelcomeScreen());
     } on FirebaseException catch (e) {
-      _logger.e('FirebaseException during Firestore query', error: e, stackTrace: e.stackTrace);
-      _logger.e('Error code: ${e.code}, Message: ${e.message}');
-      
-      if (mounted) {
-        _logger.i('Navigating to WelcomeScreen due to FirebaseException');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-        );
-      }
+      _logger.e('FirebaseException during Firestore query',
+          error: e, stackTrace: e.stackTrace);
+      _navigateTo(const WelcomeScreen());
     } catch (e, stackTrace) {
-      _logger.e('Unexpected error during auth check', error: e, stackTrace: stackTrace);
-      
-      // On error, navigate to welcome screen
-      if (mounted) {
-        _logger.i('Navigating to WelcomeScreen due to unexpected error');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-        );
-      }
+      _logger.e('Unexpected error during auth check',
+          error: e, stackTrace: stackTrace);
+      _navigateTo(const WelcomeScreen());
     }
+  }
+
+  void _navigateTo(Widget screen) {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => screen),
+    );
   }
 
   @override
   void dispose() {
-    _logger.d('Disposing SplashScreen controllers');
+    _logger.d('SplashScreen disposing');
     _logoController.dispose();
     _textController.dispose();
     _progressController.dispose();
@@ -226,79 +218,55 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
+    //final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    
-    _logger.d('Building SplashScreen - Height: $screenHeight, Width: $screenWidth');
-    
+    final isSmallScreen = screenWidth < 360;
+    final isMediumScreen = screenWidth >= 360 && screenWidth < 600;
+
+    final logoSize = isSmallScreen ? 60.0 : (isMediumScreen ? 70.0 : 80.0);
+    final titleFontSize =
+        isSmallScreen ? 24.0 : (isMediumScreen ? 28.0 : 32.0);
+    final subtitleFontSize =
+        isSmallScreen ? 11.0 : (isMediumScreen ? 12.0 : 13.0);
+    final taglineFontSize =
+        isSmallScreen ? 12.0 : (isMediumScreen ? 13.0 : 14.0);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
         child: Stack(
           children: [
-            // Subtle background decoration
             _buildBackgroundDecoration(),
-            
-            // Main content - using LayoutBuilder for responsive design
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final availableHeight = constraints.maxHeight;
-                final availableWidth = constraints.maxWidth;
-                
-                // Calculate responsive sizes based on screen dimensions
-                final isSmallScreen = availableWidth < 360;
-                final isMediumScreen = availableWidth >= 360 && availableWidth < 600;
-                final isLargeScreen = availableWidth >= 600;
-                
-                // Adaptive sizing
-                final logoSize = isSmallScreen 
-                    ? 50.0 
-                    : isMediumScreen 
-                        ? 60.0 
-                        : 70.0;
-                
-                final titleFontSize = isSmallScreen 
-                    ? 32.0 
-                    : isMediumScreen 
-                        ? 40.0 
-                        : 48.0;
-                
-                final subtitleFontSize = isSmallScreen 
-                    ? 13.0 
-                    : isMediumScreen 
-                        ? 15.0 
-                        : 16.0;
-                
-                final taglineFontSize = isSmallScreen 
-                    ? 11.0 
-                    : isMediumScreen 
-                        ? 12.0 
-                        : 13.0;
-                
-                return Center(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
+            Center(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final availableHeight = constraints.maxHeight;
+                  return SingleChildScrollView(
+                    physics: const NeverScrollableScrollPhysics(),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
                         minHeight: availableHeight,
-                        maxWidth: isLargeScreen ? 600 : availableWidth,
+                        maxWidth: isMediumScreen ? 500 : 600,
                       ),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: availableWidth * 0.08,
-                          vertical: availableHeight * 0.05,
+                          horizontal: screenWidth * 0.08,
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            SizedBox(height: availableHeight * 0.1),
-                            
-                            // Animated logo with modern design
+                            SizedBox(height: availableHeight * 0.12),
+
+                            // Logo with scale animation
                             ScaleTransition(
                               scale: _logoAnimation,
                               child: Container(
-                                width: isSmallScreen ? 120 : (isMediumScreen ? 140 : 160),
-                                height: isSmallScreen ? 120 : (isMediumScreen ? 140 : 160),
+                                width: isSmallScreen
+                                    ? 120
+                                    : (isMediumScreen ? 140 : 160),
+                                height: isSmallScreen
+                                    ? 120
+                                    : (isMediumScreen ? 140 : 160),
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     begin: Alignment.topLeft,
@@ -311,12 +279,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   borderRadius: BorderRadius.circular(32),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF7B2CBF).withValues(alpha: 0.3),
+                                      color: const Color(0xFF7B2CBF)
+                                          .withValues(alpha: 0.3),
                                       blurRadius: 30,
                                       offset: const Offset(0, 10),
                                     ),
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.1),
                                       blurRadius: 20,
                                       offset: const Offset(0, 5),
                                     ),
@@ -329,9 +299,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 ),
                               ),
                             ),
-                            
+
                             SizedBox(height: availableHeight * 0.05),
-                            
+
                             // Animated company name
                             FadeTransition(
                               opacity: _textFadeAnimation,
@@ -350,20 +320,22 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                         height: 1.2,
                                       ),
                                     ),
-                                    
+
                                     SizedBox(height: availableHeight * 0.025),
-                                    
-                                    // Subtitle badge
+
                                     Container(
                                       padding: EdgeInsets.symmetric(
                                         horizontal: isSmallScreen ? 16 : 20,
                                         vertical: isSmallScreen ? 8 : 10,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF7B2CBF).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(20),
+                                        color: const Color(0xFF7B2CBF)
+                                            .withValues(alpha: 0.1),
+                                        borderRadius:
+                                            BorderRadius.circular(20),
                                         border: Border.all(
-                                          color: const Color(0xFF7B2CBF).withValues(alpha: 0.2),
+                                          color: const Color(0xFF7B2CBF)
+                                              .withValues(alpha: 0.2),
                                           width: 1,
                                         ),
                                       ),
@@ -379,10 +351,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                         ),
                                       ),
                                     ),
-                                    
+
                                     SizedBox(height: availableHeight * 0.015),
-                                    
-                                    // Tagline
+
                                     Text(
                                       'Italian Excellence, Global Reach',
                                       textAlign: TextAlign.center,
@@ -398,10 +369,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 ),
                               ),
                             ),
-                            
+
                             SizedBox(height: availableHeight * 0.12),
-                            
-                            // Animated loading indicator
+
+                            // Loading indicator
                             FadeTransition(
                               opacity: _textFadeAnimation,
                               child: Column(
@@ -409,8 +380,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   SizedBox(
                                     width: isSmallScreen ? 40 : 45,
                                     height: isSmallScreen ? 40 : 45,
-                                    child: CircularProgressIndicator(
-                                      valueColor: const AlwaysStoppedAnimation<Color>(
+                                    child: const CircularProgressIndicator(
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
                                         Color(0xFF7B2CBF),
                                       ),
                                       strokeWidth: 3,
@@ -430,15 +402,15 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 ],
                               ),
                             ),
-                            
+
                             SizedBox(height: availableHeight * 0.1),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -449,7 +421,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Widget _buildBackgroundDecoration() {
     return Stack(
       children: [
-        // Top right accent
         Positioned(
           top: -100,
           right: -100,
@@ -469,8 +440,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             ),
           ),
         ),
-        
-        // Bottom left accent
         Positioned(
           bottom: -150,
           left: -150,
