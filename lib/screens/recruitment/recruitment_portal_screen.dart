@@ -262,19 +262,6 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
   Future<bool> _isEmailRegistered(String email) async {
     _logger.i('Checking if email is registered: $email');
 
-    // ── Firebase Authentication check (commented — use if needed) ─────────
-    /*try {
-      final methods = await FirebaseAuth.instance
-          .fetchSignInMethodsForEmail(email);
-      if (methods.isNotEmpty) {
-        _logger.w('Email found in Firebase Auth with methods: $methods');
-        return true;
-      }
-      _logger.d('Email not found in Firebase Auth');
-    } on FirebaseAuthException catch (e) {
-      _logger.w('fetchSignInMethodsForEmail error: ${e.code} — treating as unregistered');
-    }*/
-
     // ── Users collection check (email field in documents) ─────────────────
     try {
       final usersQuery = await FirebaseFirestore.instance
@@ -576,24 +563,24 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                     .doc(sanitizedEmail)
                     .get();
 
-                    if (doc.exists) {
-                      _logger.i('Dialog check: application found — navigating');
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('recruitment_email', email);
+                if (doc.exists) {
+                  _logger.i('Dialog check: application found — navigating');
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('recruitment_email', email);
 
-                      // ✅ Guard BOTH contexts before using them
-                      if (mounted && dialogCtx.mounted) {
-                        Navigator.of(dialogCtx).pop();
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => RecruitmentStatusScreen(
-                              recruiteeEmail: email,
-                              sanitizedEmail: sanitizedEmail,
-                            ),
-                          ),
-                        );
-                      }
-                    } else {
+                  // ✅ Guard BOTH contexts before using them
+                  if (mounted && dialogCtx.mounted) {
+                    Navigator.of(dialogCtx).pop();
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => RecruitmentStatusScreen(
+                          recruiteeEmail: email,
+                          sanitizedEmail: sanitizedEmail,
+                        ),
+                      ),
+                    );
+                  }
+                } else {
                   _logger.i('Dialog check: no application found');
                   setDialogState(() => result = 'not_found');
                 }
@@ -627,7 +614,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Check Application Status',
+                      'Check Account Status',
                       style: TextStyle(fontSize: 17),
                     ),
                   ),
@@ -638,7 +625,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Already applied or returning on a new device? Enter your email to retrieve your existing application.',
+                    'Already registered or returning on a new device. Confirm your email to retrieve your existing account.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Color(0xFF64748B),
@@ -735,7 +722,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
                           ),
                         )
                       : const Text(
-                          'Check Status',
+                          'Check Account',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                 ),
@@ -952,7 +939,8 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
       );
       setState(() {
         _errorMessage =
-            'Failed to submit application. Please try again.\nError: ${e.message}';
+            'We are no longer accepting applications at this time. Please check back later when new positions are available/advertised.';
+        //'Failed to submit application. Please try again.';
       });
     } catch (e, stackTrace) {
       _logger.e(
@@ -1192,7 +1180,7 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
         onPressed: _showReturningUserDialog,
         icon: const Icon(Icons.devices, size: 15, color: Color(0xFF7B2CBF)),
         label: const Text(
-          'Already applied or using a new device?',
+          'Already Registered or using a new device?',
           style: TextStyle(
             fontSize: 13,
             color: Color(0xFF7B2CBF),

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-
 import 'package:almahub/services/excel_download_service.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -78,15 +77,13 @@ class _HRRecruitmentDashboardState extends State<HRRecruitmentDashboard> {
   }
 
   // Build (or rebuild) the Firestore stream for [filter].
-  // Capped at 200 docs so the initial fetch stays fast; the full dataset is
-  // only pulled on an explicit Excel export.
+  // No document limit — all records are fetched so every tab shows the full
+  // correct count regardless of collection size.
   Stream<QuerySnapshot> _buildStream(String filter) {
-    const int fetchLimit = 200;
     if (filter == 'all') {
       return _firestore
           .collection('Recruitees')
           .orderBy('submittedAt', descending: true)
-          .limit(fetchLimit)
           .snapshots();
     }
     // No orderBy here to avoid the composite-index requirement; sorted
@@ -94,7 +91,6 @@ class _HRRecruitmentDashboardState extends State<HRRecruitmentDashboard> {
     return _firestore
         .collection('Recruitees')
         .where('status', isEqualTo: filter)
-        .limit(fetchLimit)
         .snapshots();
   }
 
@@ -351,7 +347,8 @@ class _HRRecruitmentDashboardState extends State<HRRecruitmentDashboard> {
     return StreamBuilder<QuerySnapshot>(
       // FIX: Limit to 500 docs so the stats stream doesn't pull the entire
       // collection on every snapshot (was previously unlimited = full table scan).
-      stream: _firestore.collection('Recruitees').limit(500).snapshots(),
+      // No limit — stats counts must reflect the full collection size.
+      stream: _firestore.collection('Recruitees').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox.shrink();
