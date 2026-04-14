@@ -20,12 +20,13 @@ class _RecruitmentPortalScreenState extends State<RecruitmentPortalScreen>
     with TickerProviderStateMixin {
   // ── Recruitment fields list — add more entries here to expand the dropdown ──
   static const List<String> _recruitmentFields = [
-    'Field Officer',
-    'Regional Co-ordinator',
-    'ICT Officer',
-    'Crop Production Coordinator',
-    'Carbon Credit Lead',
-    'Certification Officer/Expert',
+    //'Field Officer',
+    //'Regional Co-ordinator',
+    //'ICT Officer',
+    //'Crop Production Coordinator',
+    //'Carbon Credit Lead',
+    //'Certification Officer/Expert',
+    'Dispatch Clerk',
   ];
 
   final _formKey = GlobalKey<FormState>();
