@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // ============================================
     // USERS COLLECTION
     // ============================================
@@ -22,24 +22,18 @@ service cloud.firestore {
 
       allow delete: if request.auth != null;
     }
-    
+
     // ============================================
     // DRAFT COLLECTION
     // ============================================
     match /Draft/{draftId} {
       allow read: if request.auth != null;
-
-      //    Auth presence is the correct and sufficient guard here.
       allow create: if request.auth != null;
-
       allow update: if request.auth != null &&
                        (
                          resource.data.uid == request.auth.uid ||
                          request.auth != null
                        );
-
-      //    delete — covers both HR dashboard deletes AND the firestore_service
-      //    draft-cleanup that runs during submission (status draft → submitted).
       allow delete: if request.auth != null;
 
       match /DailyHours/{dateKey} {
@@ -48,16 +42,13 @@ service cloud.firestore {
         allow delete: if request.auth != null;
       }
     }
-    
+
     // ============================================
     // EMPLOYEE DETAILS COLLECTION
     // ============================================
     match /EmployeeDetails/{employeeId} {
       allow read: if request.auth != null;
-
-      //    Auth presence is the correct and sufficient guard here.
       allow create: if request.auth != null;
-
       allow update: if request.auth != null;
       allow delete: if request.auth != null;
 
@@ -67,9 +58,9 @@ service cloud.firestore {
         allow delete: if request.auth != null;
       }
     }
-    
+
     // ============================================
-    // SUPERVISORS COLLECTION - Supervisor Role Assignments
+    // SUPERVISORS COLLECTION
     // ============================================
     match /Supervisors/{supervisorId} {
       allow read: if request.auth != null;
@@ -78,9 +69,9 @@ service cloud.firestore {
       allow update: if request.auth != null;
       allow delete: if request.auth != null;
     }
-    
+
     // ============================================
-    // DEPARTMENTS COLLECTION - Department Management
+    // DEPARTMENTS COLLECTION
     // ============================================
     match /Departments/{departmentId} {
       allow read: if request.auth != null;
@@ -89,9 +80,9 @@ service cloud.firestore {
       allow update: if request.auth != null;
       allow delete: if request.auth != null;
     }
-    
+
     // ============================================
-    // HOURS FORWARDED COLLECTION - Supervisor to Accountant
+    // HOURS FORWARDED COLLECTION
     // ============================================
     match /HoursForwarded/{forwardId} {
       allow read: if request.auth != null;
@@ -99,34 +90,45 @@ service cloud.firestore {
       allow update: if request.auth != null;
       allow delete: if request.auth != null;
     }
-    
+
     // ============================================
-    // RECRUITEES COLLECTION - Public recruitment submissions
+    // RECRUITEES COLLECTION
     // ============================================
     match /Recruitees/{recruiteeId} {
-      // ✅ Allow anyone to create (no authentication required for initial submission)
-      allow create: if request.resource.data.keys().hasAll(['fullName', 'email', 'cvUrl', 'submittedAt', 'status']) 
-                    && request.resource.data.fullName is string
-                    && request.resource.data.email is string
-                    && request.resource.data.email.matches('.*@.*[.].*')
-                    && request.resource.data.cvUrl is string
-                    && request.resource.data.status == 'pending';
-      
-      // ✅ Allow public read access for applicants to check their own status
-      // The recruiteeId is the sanitized email, so applicants can read their own document
+      allow create: if request.resource.data.keys().hasAll(['fullName', 'email', 'cvUrl', 'submittedAt', 'status'])
+                   && request.resource.data.fullName is string
+                   && request.resource.data.email is string
+                   && request.resource.data.email.matches('.*@.*[.].*')
+                   && request.resource.data.cvUrl is string
+                   && request.resource.data.status == 'pending';
+
       allow read: if true;
-      
-      // ✅ Allow authenticated users (HR/Admin) to update status and review notes
-      // Also allow applicants to update their own document (for deletion request)
-      allow update: if request.auth != null || 
+
+      allow update: if request.auth != null ||
                        (
-                         // Allow status field updates for workflow
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewNotes', 'updatedAt'])
                        );
-      
-      // ✅ Allow deletion by authenticated users OR by the document itself (self-deletion)
-      // This enables applicants to delete their own applications
+
       allow delete: if true;
+    }
+
+    // ============================================
+    // EMPLOYEE ONBOARDING COLLECTION
+    // Covers the HREmployeeOnboardingScreen wizard
+    // (both Draft saves and final EmployeeDetails submissions)
+    // ============================================
+    match /EmployeeOnboarding/{onboardingId} {
+      // Any authenticated user (HR officer) can read onboarding records
+      allow read: if request.auth != null;
+
+      // HR creates new onboarding documents (draft or submitted)
+      allow create: if request.auth != null;
+
+      // HR can update at any stage (draft edits, status changes)
+      allow update: if request.auth != null;
+
+      // HR can delete draft records that were promoted to EmployeeDetails
+      allow delete: if request.auth != null;
     }
   }
 }

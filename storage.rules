@@ -1,0 +1,70 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ============================================
+    // EMPLOYEE DOCUMENTS
+    // Uploaded by the onboarding wizard under:
+    //   employee_documents/{employeeName}/{fieldName}/{filename}
+    // ============================================
+    match /employee_documents/{employeeName}/{fieldName}/{filename} {
+      // Authenticated users (HR) can read and list all employee documents
+      allow read, list: if request.auth != null;
+
+      // Any authenticated user may upload; enforce size + type constraints
+      allow create: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('application/pdf') ||
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('application/msword') ||
+          request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*')
+        );
+
+      // Allow replacing an existing file (re-upload)
+      allow update: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024;
+
+      // HR can delete documents
+      allow delete: if request.auth != null;
+    }
+
+    // Allow listAll() to traverse intermediate prefix paths
+    match /employee_documents/{employeeName}/{fieldName} {
+      allow list: if request.auth != null;
+    }
+    match /employee_documents/{employeeName} {
+      allow list: if request.auth != null;
+    }
+    match /employee_documents {
+      allow list: if request.auth != null;
+    }
+
+    // ============================================
+    // RECRUITEES FOLDER
+    // CV uploads by unauthenticated applicants
+    // ============================================
+    match /Recruitees/{fileName} {
+      // Public upload — applicants are not signed in
+      allow write: if request.resource.size < 10 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('application/pdf') ||
+          request.resource.contentType.matches('application/msword') ||
+          request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        );
+
+      // Public read so HR and applicants can access the CV URL
+      allow read: if true;
+
+      // Allow deletion (HR cleanup or applicant self-deletion)
+      allow delete: if true;
+    }
+
+    // ============================================
+    // Default: deny everything else
+    // ============================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

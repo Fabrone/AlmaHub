@@ -1,6 +1,6 @@
 import 'dart:io' show File;
-
 import 'package:almahub/models/employee_onboarding_models.dart';
+import 'package:almahub/screens/hr/hr_employee_onboarding_screen.dart';
 import 'package:almahub/screens/hr/hr_recruitment_dashboard.dart';
 import 'package:almahub/services/excel_download_service.dart';
 import 'package:almahub/services/excel_generation_service.dart';
@@ -21,13 +21,23 @@ import 'package:logger/logger.dart';
 // Friendly display labels for every storage field-name the wizard uses.
 // ─────────────────────────────────────────────────────────────────────────────
 const Map<String, String> _kDocumentLabels = {
+  // Step 1 — Personal Info
   'id_document': 'ID / Passport',
+  // Step 3 — Statutory
   'kra_pin': 'KRA PIN Certificate',
   'nssf_confirmation': 'NSSF Confirmation',
   'nhif_confirmation': 'NHIF Confirmation',
   'p9_form': 'P9 Form',
+  // Step 5 — Academic & Professional
   'academic_cert': 'Academic Certificate',
-  'professional_cert': 'Professional Certificate',
+  'training_cert': 'Training Certificate',
+  'professional_cert': 'Professional Certification',
+  // Step 6 — Contracts & Forms
+  'employment_contract': 'Employment Contract',
+  'employee_info_form': 'Employee Info Form',
+  'nda': 'NDA / Confidentiality',
+  // Step 7 — Benefits
+  'medical_insurance': 'Medical Insurance Form',
 };
 
 // Icon per field
@@ -38,7 +48,12 @@ const Map<String, IconData> _kDocumentIcons = {
   'nhif_confirmation': Icons.health_and_safety_outlined,
   'p9_form': Icons.description_outlined,
   'academic_cert': Icons.school_outlined,
+  'training_cert': Icons.menu_book_rounded,
   'professional_cert': Icons.workspace_premium_outlined,
+  'employment_contract': Icons.article_outlined,
+  'employee_info_form': Icons.assignment_outlined,
+  'nda': Icons.lock_outline_rounded,
+  'medical_insurance': Icons.medical_information_outlined,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1010,6 +1025,22 @@ class _HRDashboardState extends State<HRDashboard> {
           ),
         ),
         actions: [
+          // ── Onboard Employee shortcut ──────────────────────────────
+          IconButton(
+            icon: const Icon(Icons.person_add_rounded,
+                color: Color.fromARGB(255, 242, 241, 243)),
+            onPressed: () {
+              _logger.i('HR: Launching HR Employee Onboarding Screen (AppBar)');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const HREmployeeOnboardingScreen(),
+                ),
+              );
+            },
+            tooltip: 'Onboard New Employee',
+          ),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.search,
                 color: Color.fromARGB(255, 242, 241, 243)),
@@ -1098,28 +1129,57 @@ class _HRDashboardState extends State<HRDashboard> {
 
   // ── FAB ────────────────────────────────────────────────────────────────────
   Widget _buildFloatingDownloadButton() {
-    return FloatingActionButton.extended(
-      onPressed: _isDownloading ? null : _downloadExcel,
-      backgroundColor: _isDownloading
-          ? Colors.grey.shade400
-          : const Color.fromARGB(255, 86, 10, 119),
-      foregroundColor: Colors.white,
-      icon: _isDownloading
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // ── Onboard Employee button ──────────────────────────────────────
+        FloatingActionButton.extended(
+          heroTag: 'onboard_fab',
+          onPressed: () {
+            _logger.i('HR: Launching HR Employee Onboarding Screen');
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const HREmployeeOnboardingScreen(),
               ),
-            )
-          : const Icon(Icons.download_rounded),
-      label: Text(
-        _isDownloading
-            ? (_downloadProgress ?? 'Generating...')
-            : 'Download Excel',
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+            );
+          },
+          backgroundColor: const Color.fromARGB(255, 22, 163, 74),
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.person_add_rounded),
+          label: const Text(
+            'Onboard Employee',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // ── Download Excel button ────────────────────────────────────────
+        FloatingActionButton.extended(
+          heroTag: 'download_fab',
+          onPressed: _isDownloading ? null : _downloadExcel,
+          backgroundColor: _isDownloading
+              ? Colors.grey.shade400
+              : const Color.fromARGB(255, 86, 10, 119),
+          foregroundColor: Colors.white,
+          icon: _isDownloading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.download_rounded),
+          label: Text(
+            _isDownloading
+                ? (_downloadProgress ?? 'Generating...')
+                : 'Download Excel',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1611,6 +1671,31 @@ class _HRDashboardState extends State<HRDashboard> {
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                      // ── Edit / Open onboarding form ──────────
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.edit_note_rounded,
+                                          size: 20,
+                                          color: Color.fromARGB(255, 86, 10, 119),
+                                        ),
+                                        onPressed: () {
+                                          _logger.i(
+                                              'Edit onboarding for: ${doc.id}');
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  HREmployeeOnboardingScreen(
+                                                employeeId: doc.id,
+                                                initialData: data,
+                                                collectionSource:
+                                                    _getCollectionName(),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        tooltip: 'Edit Onboarding',
+                                      ),
                                       if (_statusFilter == 'draft')
                                         IconButton(
                                           icon: const Icon(

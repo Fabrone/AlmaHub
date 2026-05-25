@@ -6,8 +6,6 @@ import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/settings_screen.dart';
 import 'package:almahub/screens/hr/hr_dashboard.dart';
 import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
-// import 'package:almahub/screens/accountant/accountant_dashboard.dart';
-// import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
