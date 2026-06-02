@@ -198,50 +198,65 @@ class _ConsentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    final backgroundColor = value
+        ? OnboardingColors.successSurface
+        : Colors.grey.shade50;
+    
+    final borderColor = value
+        ? OnboardingColors.successBorder
+        : OnboardingColors.border;
+
+    return AnimatedPhysicalModel(
       duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        color: value
-            ? OnboardingColors.successSurface
-            : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: value
-              ? OnboardingColors.successBorder
-              : OnboardingColors.border,
-          width: value ? 1.5 : 1,
-        ),
-      ),
-      child: CheckboxListTile(
-        value: value,
-        onChanged: onChanged,
-        activeColor: OnboardingColors.primary,
-        checkColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: value
-                ? OnboardingColors.success
-                : OnboardingColors.textPrimary,
+      shape: BoxShape.rectangle,
+      elevation: 0,
+      color: backgroundColor,
+      shadowColor: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: borderColor,
+            width: value ? 1.5 : 1,
           ),
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 12,
-              color: OnboardingColors.textSecondary,
-              height: 1.4,
+        child: Material(
+          color: Colors.transparent,
+          child: CheckboxListTile(
+            value: value,
+            onChanged: onChanged,
+            activeColor: OnboardingColors.primary,
+            checkColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            visualDensity: VisualDensity.compact,
+            splashRadius: 20,
+            title: Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: value
+                    ? OnboardingColors.success
+                    : OnboardingColors.textPrimary,
+              ),
             ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: OnboardingColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           ),
         ),
-        controlAffinity: ListTileControlAffinity.leading,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       ),
     );
   }

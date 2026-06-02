@@ -1,7 +1,6 @@
 import 'package:almahub/models/employee_onboarding_models.dart';
 import 'package:almahub/models/user_model.dart';
 import 'package:almahub/screens/employee/employee_hours_view.dart';
-import 'package:almahub/screens/employee/employee_onboarding_wizard.dart';
 import 'package:almahub/screens/role_selection_screen.dart';
 import 'package:almahub/screens/settings_screen.dart';
 import 'package:almahub/screens/hr/hr_dashboard.dart';
@@ -9,21 +8,20 @@ import 'package:almahub/screens/supervisor/supervisor_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:reactive_forms/reactive_forms.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
-/// Employee dashboard for viewing and managing their onboarding application
 class EmployeeDashboard extends StatefulWidget {
   final String? employeeEmail;
-
-  const EmployeeDashboard({
-    super.key,
-    this.employeeEmail,
-  });
-
-  @override
-  State<EmployeeDashboard> createState() => _EmployeeDashboardState();
+  const EmployeeDashboard({super.key, this.employeeEmail});
+  @override State<EmployeeDashboard> createState() => _EmployeeDashboardState();
 }
 
 class _EmployeeDashboardState extends State<EmployeeDashboard>
@@ -31,1131 +29,668 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final Logger _logger = Logger(
-    printer: PrettyPrinter(
-      methodCount: 2,
-      errorMethodCount: 8,
-      lineLength: 120,
-      colors: true,
-      printEmojis: true,
-      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
-    ),
+    printer: PrettyPrinter(methodCount: 2, errorMethodCount: 8, lineLength: 120, colors: true, printEmojis: true, dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart),
   );
-
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-  
-  // Role monitoring
   StreamSubscription<DocumentSnapshot>? _roleListener;
   String? _currentUserRole;
   bool _isCheckingRole = true;
+  EmployeeOnboarding? _employeeData;
+  bool _isLoadingEmployee = true;
+  String _activeMenuItem = 'Personal Information';
+  bool _showLeaveForm = false;
+  Map<String, dynamic>? _leaveBalance;
+  List<QueryDocumentSnapshot> _leaveHistory = [];
+  bool _isLoadingLeave = true;
 
-  @override
-  void initState() {
+  // Profile Photo
+  String? _profilePhotoUrl;
+  File? _profileImageFile;
+  Uint8List? _profileImageBytes;
+  bool _isUploadingPhoto = false;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  final List<_MenuItem> _menuItems = [
+    _MenuItem('Personal Information', Icons.person_outline_rounded, Colors.blue),
+    _MenuItem('Employment Details', Icons.work_outline_rounded, Colors.teal),
+    _MenuItem('Statutory & Remuneration', Icons.account_balance_wallet_outlined, Colors.purple),
+    _MenuItem('Academic & File Documents', Icons.school_outlined, Colors.orange),
+    _MenuItem('Contracts & Internal Compliance', Icons.gavel_outlined, Colors.indigo),
+    _MenuItem('Work Tools & System Benefits', Icons.card_membership_outlined, Colors.green),
+    _MenuItem('Leave Application', Icons.calendar_month_outlined, Colors.redAccent),
+  ];
+
+  @override void initState() {
     super.initState();
     _logger.i('EmployeeDashboard initialized with email: ${widget.employeeEmail}');
-
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-
+    _animationController = AnimationController(duration: const Duration(milliseconds: 800), vsync: this);
     _animationController.forward();
-    
-    // Setup role listener
     _setupRoleListener();
+    _loadEmployeeData();
+    _loadLeaveData();
+    _loadProfilePhoto();
   }
 
-  @override
-  void dispose() {
+  @override void dispose() {
     _animationController.dispose();
     _roleListener?.cancel();
     _logger.i('EmployeeDashboard disposed');
     super.dispose();
   }
 
-  // Setup realtime role monitoring
   void _setupRoleListener() async {
     final currentUser = _auth.currentUser;
-    
     if (currentUser == null) {
       _logger.e('No authenticated user found');
-      if (mounted) {
-        setState(() => _isCheckingRole = false);
-      }
+      if (mounted) setState(() => _isCheckingRole = false);
       return;
     }
-
     try {
       _logger.i('Setting up role listener for user: ${currentUser.uid}');
-      
-      // Find user document in Users collection by UID
-      final userQuery = await _firestore
-          .collection('Users')
-          .where('uid', isEqualTo: currentUser.uid)
-          .limit(1)
-          .get();
-
+      final userQuery = await _firestore.collection('Users').where('uid', isEqualTo: currentUser.uid).limit(1).get();
       if (userQuery.docs.isEmpty) {
         _logger.w('User not found in Users collection');
-        if (mounted) {
-          setState(() => _isCheckingRole = false);
-        }
+        if (mounted) setState(() => _isCheckingRole = false);
         return;
       }
-
       final userDocId = userQuery.docs.first.id;
-      _logger.d('Found user document: $userDocId');
-
-      // Set up realtime listener on the user document
-      _roleListener = _firestore
-          .collection('Users')
-          .doc(userDocId)
-          .snapshots()
-          .listen((docSnapshot) {
+      _roleListener = _firestore.collection('Users').doc(userDocId).snapshots().listen((docSnapshot) {
         if (!mounted) return;
-
-        if (!docSnapshot.exists) {
-          _logger.e('User document no longer exists');
-          return;
-        }
-
+        if (!docSnapshot.exists) return;
         final userData = docSnapshot.data() as Map<String, dynamic>;
         final newRole = userData['role'] as String?;
-
-        _logger.i('Role update detected: $newRole (previous: $_currentUserRole)');
-
-        // Check if role has changed
         if (_currentUserRole != null && _currentUserRole != newRole) {
-          _logger.i('Role changed from $_currentUserRole to $newRole');
           _handleRoleChange(newRole);
         }
-
-        setState(() {
-          _currentUserRole = newRole;
-          _isCheckingRole = false;
-        });
+        if (mounted) {
+          setState(() { _currentUserRole = newRole; _isCheckingRole = false; });
+        }
       }, onError: (error) {
         _logger.e('Error in role listener', error: error);
-        if (mounted) {
-          setState(() => _isCheckingRole = false);
-        }
+        if (mounted) setState(() => _isCheckingRole = false);
       });
     } catch (e, stackTrace) {
       _logger.e('Error setting up role listener', error: e, stackTrace: stackTrace);
+      if (mounted) setState(() => _isCheckingRole = false);
+    }
+  }
+
+  void _handleRoleChange(String? newRole) {
+    if (newRole == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Your role has been updated to: $newRole'), backgroundColor: Colors.blue, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 4)),
+    );
+    if (newRole == UserRoles.admin) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const RoleSelectionScreen()));
+        }
+      });
+    } else if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadEmployeeData() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) { if (mounted) setState(() => _isLoadingEmployee = false); return; }
+    try {
+      final detailsSnap = await _firestore.collection('EmployeeDetails').where('uid', isEqualTo: currentUser.uid).limit(1).get();
+      if (detailsSnap.docs.isNotEmpty) {
+        final data = detailsSnap.docs.first.data();
+        if (mounted) { setState(() { _employeeData = EmployeeOnboarding.fromMap(data); _isLoadingEmployee = false; }); }
+        return;
+      }
+      final draftSnap = await _firestore.collection('Draft').where('uid', isEqualTo: currentUser.uid).limit(1).get();
+      if (draftSnap.docs.isNotEmpty) {
+        final data = draftSnap.docs.first.data();
+        if (mounted) { setState(() { _employeeData = EmployeeOnboarding.fromMap(data); _isLoadingEmployee = false; }); }
+      } else {
+        if (mounted) setState(() => _isLoadingEmployee = false);
+      }
+    } catch (e) {
+      _logger.e('Failed to load employee data', error: e);
+      if (mounted) setState(() => _isLoadingEmployee = false);
+    }
+  }
+
+  Future<void> _loadLeaveData() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) { if (mounted) setState(() => _isLoadingLeave = false); return; }
+    try {
+      final balanceDoc = await _firestore.collection('LeaveData').doc(currentUser.uid).get();
+      if (balanceDoc.exists && mounted) { setState(() => _leaveBalance = balanceDoc.data()); }
+      final historySnap = await _firestore.collection('LeaveData').doc(currentUser.uid).collection('Applications').orderBy('startDate', descending: true).limit(10).get();
+      if (mounted) { setState(() { _leaveHistory = historySnap.docs; _isLoadingLeave = false; }); }
+    } catch (e) {
+      _logger.e('Failed to load leave data', error: e);
+      if (mounted) setState(() => _isLoadingLeave = false);
+    }
+  }
+
+  Future<void> _loadProfilePhoto() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    try {
+      final userDoc = await _firestore.collection('Users').doc(currentUser.uid).get();
+      if (userDoc.exists && mounted) {
+        final data = userDoc.data();
+        if (data != null && data['profilePhotoUrl'] != null) {
+          setState(() => _profilePhotoUrl = data['profilePhotoUrl'] as String);
+        }
+      }
+    } catch (e) {
+      _logger.e('Failed to load profile photo', error: e);
+    }
+  }
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              ),
+              const Text('Update Profile Photo', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF54046C).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.camera_alt, color: Color(0xFF54046C)),
+                ),
+                title: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Capture with camera', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.photo_library, color: Colors.green),
+                ),
+                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Select existing photo', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              if (_profilePhotoUrl != null)
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.delete_outline, color: Colors.red),
+                  ),
+                  title: const Text('Remove Photo', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                  subtitle: const Text('Delete current profile photo', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _removeProfilePhoto();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (pickedFile == null) return;
+      final bytes = await pickedFile.readAsBytes();
+      setState(() {
+                _profileImageBytes = bytes;
+        _profileImageFile = kIsWeb ? null : File(pickedFile.path);
+      });
+      await _uploadProfileImage();
+    } catch (e) {
+      _logger.e('Failed to pick image', error: e);
       if (mounted) {
-        setState(() => _isCheckingRole = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to select image: ${e.toString()}'), backgroundColor: Colors.red),
+        );
       }
     }
   }
 
-  // Handle role changes
-  void _handleRoleChange(String? newRole) {
-    if (newRole == null) return;
+  Future<void> _uploadProfileImage() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    if (_profileImageFile == null && _profileImageBytes == null) return;
 
-    _logger.i('Handling role change to: $newRole');
+    setState(() => _isUploadingPhoto = true);
 
-    // Show notification about role change
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Your role has been updated to: $newRole'),
-        backgroundColor: Colors.blue,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
-    );
+    try {
+      final storageRef = FirebaseStorage.instance.ref().child('profile_photos').child('${currentUser.uid}.jpg');
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
 
-    // If promoted to Admin, navigate to Role Selection Screen
-    if (newRole == UserRoles.admin) {
-      _logger.i('User promoted to Admin, navigating to RoleSelectionScreen');
-      
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => const RoleSelectionScreen(),
-            ),
-          );
-        }
-      });
+      late TaskSnapshot snapshot;
+      if (kIsWeb && _profileImageBytes != null) {
+        snapshot = await storageRef.putData(_profileImageBytes!, metadata);
+      } else if (_profileImageFile != null) {
+        snapshot = await storageRef.putFile(_profileImageFile!, metadata);
+      } else {
+        throw Exception('No image data available for upload');
+      }
+
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      await _firestore.collection('Users').doc(currentUser.uid).update({'profilePhotoUrl': downloadUrl});
+
+      if (mounted) {
+        setState(() {
+          _profilePhotoUrl = downloadUrl;
+          _profileImageFile = null;
+          _profileImageBytes = null;
+                    _isUploadingPhoto = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo updated successfully!'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      _logger.e('Failed to upload profile photo', error: e);
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload profile photo: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
     }
-    
-    // For other role changes (HR, Supervisor, Accountant), just refresh the UI
-    else {
-      _logger.d('Role changed to $newRole, refreshing UI');
-      setState(() {});
+  }
+
+  Future<void> _removeProfilePhoto() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+
+    setState(() => _isUploadingPhoto = true);
+
+    try {
+      final storageRef = FirebaseStorage.instance.ref().child('profile_photos').child('${currentUser.uid}.jpg');
+      await storageRef.delete();
+    } catch (e) {
+      _logger.w('No existing photo to delete or deletion failed', error: e);
+    }
+
+    try {
+      await _firestore.collection('Users').doc(currentUser.uid).update({'profilePhotoUrl': FieldValue.delete()});
+      if (mounted) {
+        setState(() {
+          _profilePhotoUrl = null;
+          _profileImageFile = null;
+          _profileImageBytes = null;
+                    _isUploadingPhoto = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo removed'), backgroundColor: Colors.blue),
+        );
+      }
+    } catch (e) {
+      _logger.e('Failed to remove profile photo', error: e);
+      if (mounted) setState(() => _isUploadingPhoto = false);
+    }
+  }
+
+
+  Future<void> _submitLeaveApplication(Map<String, dynamic> application) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    try {
+      await _firestore.collection('LeaveData').doc(currentUser.uid).collection('Applications').add({
+        ...application,
+        'status': 'pending',
+        'appliedAt': FieldValue.serverTimestamp(),
+        'employeeName': _employeeData?.personalInfo.fullName ?? 'Unknown',
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Leave application submitted successfully!'), backgroundColor: Colors.green),
+        );
+        setState(() => _showLeaveForm = false);
+      }
+      _loadLeaveData();
+    } catch (e) {
+      _logger.e('Failed to submit leave', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to submit leave request'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    _logger.d('Building EmployeeDashboard widget');
-    
-    // Show loading while checking role
     if (_isCheckingRole) {
       return Scaffold(
-        backgroundColor: const Color.fromARGB(255, 245, 245, 250),
-        appBar: _buildModernAppBar(),
-        body: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(
-                color: Color.fromARGB(255, 84, 4, 108),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Loading...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        ),
+        backgroundColor: const Color(0xFFF5F5FA),
+        appBar: _buildModernAppBar(false),
+        body: const Center(child: CircularProgressIndicator(color: Color(0xFF54046C))),
       );
     }
-    
-    return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 245, 245, 250),
-      appBar: _buildModernAppBar(),
-      body: _buildApplicationsList(),
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 900;
+        return Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: const Color(0xFFF5F5FA),
+          appBar: _buildModernAppBar(isDesktop),
+          drawer: isDesktop ? null : _buildMobileDrawer(),
+          body: isDesktop ? _buildDesktopBody() : _buildMobileBody(),
+        );
+      },
     );
   }
 
-  PreferredSizeWidget _buildModernAppBar() {
+  Widget _buildDesktopBody() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 280,
+          margin: const EdgeInsets.fromLTRB(20, 16, 0, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: _buildSidebarContent(),
+          ),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async { await _loadEmployeeData(); await _loadLeaveData(); },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(0, 16, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_currentUserRole != null && _currentUserRole != UserRoles.employee) _buildRoleBadge(),
+                  const SizedBox(height: 16),
+                  _buildProfileHeaderCard(),
+                  const SizedBox(height: 24),
+                  _buildMainContentArea(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileBody() {
+    return RefreshIndicator(
+      onRefresh: () async { await _loadEmployeeData(); await _loadLeaveData(); },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_currentUserRole != null && _currentUserRole != UserRoles.employee) _buildRoleBadge(),
+            const SizedBox(height: 16),
+            _buildProfileHeaderCard(),
+            const SizedBox(height: 24),
+            _buildMainContentArea(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainContentArea() {
+    final emp = _employeeData;
+    if (emp == null) return const SizedBox.shrink();
+
+    if (_activeMenuItem == 'Leave Application') {
+      return _buildLeaveApplicationSection();
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: _buildSectionContent(_activeMenuItem, emp),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildModernAppBar(bool isDesktop) {
     return AppBar(
       elevation: 0,
-      backgroundColor: const Color.fromARGB(255, 84, 4, 108),
+      backgroundColor: const Color(0xFF54046C),
       toolbarHeight: 70,
-      automaticallyImplyLeading: false, // This prevents the default back button
+      automaticallyImplyLeading: false,
+      leading: isDesktop ? null : IconButton(
+        icon: const Icon(Icons.menu, color: Colors.white),
+        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.person_outline,
-              color: Colors.white,
-              size: 24,
-            ),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.person_outline, color: Colors.white, size: 24),
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                'My Profile',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              Text(
-                _currentUserRole != null 
-                    ? 'Role: $_currentUserRole' 
-                    : 'Onboarding Application',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
+              const Text('My Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(_currentUserRole != null ? 'Role: $_currentUserRole' : 'Employee Portal', style: const TextStyle(fontSize: 12, color: Colors.white70)),
             ],
           ),
         ],
       ),
       actions: [
-        // Role-specific panel access buttons
         _buildRolePanelButton(),
-        
-        // View My Hours button (hidden for Admins)
         if (_currentUserRole != null && _currentUserRole != UserRoles.admin)
-          IconButton(
-            icon: const Icon(Icons.access_time, color: Colors.white),
-            onPressed: () {
-              _logger.i('Opening My Hours view');
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EmployeeHoursView(),
-                ),
-              );
-            },
-            tooltip: 'My Work Hours',
-          ),
-        
-        IconButton(
-          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-          onPressed: () {
-            _logger.i('Notifications button clicked');
-          },
-          tooltip: 'Notifications',
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings_outlined, color: Colors.white),
-          onPressed: () {
-            _logger.i('Settings button clicked');
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SettingsScreen(),
-              ),
-            );
-          },
-          tooltip: 'Settings',
-        ),
+          IconButton(icon: const Icon(Icons.access_time, color: Colors.white), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmployeeHoursView())), tooltip: 'My Work Hours'),
+        IconButton(icon: const Icon(Icons.notifications_outlined, color: Colors.white), onPressed: () {}),
+        IconButton(icon: const Icon(Icons.settings_outlined, color: Colors.white), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), tooltip: 'Settings'),
         const SizedBox(width: 8),
       ],
     );
   }
 
-  /// Build role-specific panel access button based on current user role
-  Widget _buildRolePanelButton() {
-    if (_currentUserRole == null || _currentUserRole == UserRoles.employee) {
-      // No panel button for Employee role
-      return const SizedBox.shrink();
-    }
-
-    IconData icon;
-    Color iconColor;
-    String tooltip;
-    VoidCallback onPressed;
-
+  Widget _buildRoleBadge() {
+    Color badgeColor = Colors.blue;
+    IconData badgeIcon = Icons.business_center;
     switch (_currentUserRole) {
-      case UserRoles.admin:
-        icon = Icons.admin_panel_settings;
-        iconColor = Colors.amber;
-        tooltip = 'Admin Panel';
-        onPressed = () {
-          _logger.i('Admin navigating to RoleSelectionScreen');
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const RoleSelectionScreen(),
-            ),
-          );
-        };
-        break;
-
-      case UserRoles.hr:
-        icon = Icons.business_center;
-        iconColor = Colors.blue;
-        tooltip = 'HR Dashboard';
-        onPressed = () {
-          _logger.i('HR navigating to HRDashboard');
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const HRDashboard(),
-            ),
-          );
-        };
-        break;
-
-      case UserRoles.accountant:
-        icon = Icons.account_balance_wallet;
-        iconColor = Colors.orange;
-        tooltip = 'Accountant Dashboard';
-        onPressed = () {
-          _logger.i('Accountant attempting to navigate to AccountantDashboard');
-          // Navigator.push(
-          //   context,
-          //   MaterialPageRoute(
-          //     builder: (context) => const AccountantDashboard(),
-          //   ),
-          // );
-          
-          // Temporary message until dashboard is implemented
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Accountant Dashboard coming soon!'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        };
-        break;
-
-      case UserRoles.supervisor:
-        icon = Icons.supervisor_account;
-        iconColor = Colors.green;
-        tooltip = 'Supervisor Dashboard';
-        onPressed = () {
-          _logger.i('Supervisor attempting to navigate to SupervisorDashboard');
-          Navigator.push(
-           context,
-           MaterialPageRoute(
-           builder: (context) => const SupervisorDashboard(),
-            ),
-          );
-        };
-        break;
-
-      default:
-        return const SizedBox.shrink();
+      case 'Admin': badgeColor = Colors.amber; badgeIcon = Icons.admin_panel_settings; break;
+      case 'HR': badgeColor = Colors.blue; badgeIcon = Icons.business_center; break;
+      case 'Supervisor': badgeColor = Colors.green; badgeIcon = Icons.supervisor_account; break;
+      case 'Accountant': badgeColor = Colors.orange; badgeIcon = Icons.account_balance_wallet; break;
     }
-
-    return IconButton(
-      icon: Icon(icon, color: iconColor),
-      onPressed: onPressed,
-      tooltip: tooltip,
-    );
-  }
-
-  Widget _buildApplicationsList() {
-    _logger.d('Building applications list stream');
-
-    final currentUser = _auth.currentUser;
-
-    if (currentUser == null) {
-      _logger.e('No authenticated user found');
-      return _buildEmptyState(
-        icon: Icons.person_off,
-        title: 'Not Logged In',
-        message: 'Please log in to view your applications',
-      );
-    }
-
-    final uid = currentUser.uid;
-    _logger.i('Querying collections for user UID: $uid');
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('Draft')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, draftSnapshot) {
-        if (draftSnapshot.hasError) {
-          _logger.e('Error loading Draft collection', error: draftSnapshot.error);
-        }
-
-        if (draftSnapshot.connectionState == ConnectionState.waiting) {
-          _logger.d('Waiting for Draft collection data...');
-        } else if (draftSnapshot.hasData) {
-          _logger.d('Draft collection loaded: ${draftSnapshot.data?.docs.length ?? 0} total documents');
-        }
-
-        return StreamBuilder<QuerySnapshot>(
-          stream: _firestore
-              .collection('EmployeeDetails')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
-          builder: (context, submittedSnapshot) {
-            if (submittedSnapshot.hasError) {
-              _logger.e('Error loading EmployeeDetails collection',
-                  error: submittedSnapshot.error);
-            }
-
-            if (submittedSnapshot.connectionState == ConnectionState.waiting) {
-              _logger.d('Waiting for EmployeeDetails collection data...');
-            } else if (submittedSnapshot.hasData) {
-              _logger.d('EmployeeDetails collection loaded: ${submittedSnapshot.data?.docs.length ?? 0} total documents');
-            }
-
-            if (draftSnapshot.hasError && submittedSnapshot.hasError) {
-              _logger.e('Both collections failed to load');
-              return _buildErrorState();
-            }
-
-            if (draftSnapshot.connectionState == ConnectionState.waiting ||
-                submittedSnapshot.connectionState == ConnectionState.waiting) {
-              _logger.d('Still waiting for data...');
-              return const Center(
-                child: CircularProgressIndicator(
-                  color: Color.fromARGB(255, 84, 4, 108),
-                ),
-              );
-            }
-
-            // Filter client-side for current user
-            final List<QueryDocumentSnapshot> allApplications = [];
-            bool hasDrafts = false;
-
-            if (draftSnapshot.hasData) {
-              final userDrafts = draftSnapshot.data!.docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return data['uid'] == uid;
-              }).toList();
-
-              allApplications.addAll(userDrafts);
-              hasDrafts = userDrafts.isNotEmpty;
-              _logger.d('Filtered ${userDrafts.length} drafts for user (from ${draftSnapshot.data!.docs.length} total)');
-            }
-
-            if (submittedSnapshot.hasData) {
-              final userSubmissions = submittedSnapshot.data!.docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return data['uid'] == uid;
-              }).toList();
-
-              allApplications.addAll(userSubmissions);
-              _logger.d('Filtered ${userSubmissions.length} submissions for user (from ${submittedSnapshot.data!.docs.length} total)');
-            }
-
-            // Sort by creation date
-            allApplications.sort((a, b) {
-              final aData = a.data() as Map<String, dynamic>;
-              final bData = b.data() as Map<String, dynamic>;
-              final aTimestamp = aData['createdAt'] as Timestamp?;
-              final bTimestamp = bData['createdAt'] as Timestamp?;
-
-              if (aTimestamp == null || bTimestamp == null) return 0;
-              return bTimestamp.compareTo(aTimestamp);
-            });
-
-            _logger.i('Total applications for current user: ${allApplications.length}');
-
-            if (allApplications.isEmpty) {
-              _logger.w('No applications found for current user');
-              return _buildEmptyStateWithAction(
-                icon: Icons.description_outlined,
-                title: 'No Applications Yet',
-                message: 'Start your onboarding journey by creating your first application',
-                actionLabel: 'Create Application',
-                onAction: _startNewApplication,
-              );
-            }
-
-            // User has at least one application
-            return Column(
-              children: [
-                // Show role badge if not Employee
-                if (_currentUserRole != null && _currentUserRole != UserRoles.employee)
-                  _buildRoleBadge(_currentUserRole!),
-                
-                // Animated draft reminder if there are drafts
-                if (hasDrafts) _buildDraftReminder(),
-                
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final screenWidth = constraints.maxWidth;
-                      _logger.d('Applications list screen width: $screenWidth px');
-
-                      return ListView.builder(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.04,
-                          vertical: 16,
-                        ),
-                        itemCount: allApplications.length, // ✅ REMOVED: +1 for logout button
-                        itemBuilder: (context, index) {
-                          final doc = allApplications[index];
-                          final data = doc.data() as Map<String, dynamic>;
-                          final status = data['status'] ?? 'draft';
-
-                          _logger.d('Rendering application ${index + 1}: ${data['personalInfo']?['fullName'] ?? 'Unknown'} (Status: $status)');
-
-                          return _buildResponsiveApplicationCard(
-                            doc: doc,
-                            data: data,
-                            status: status,
-                            screenWidth: screenWidth,
-                            index: index,
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Role badge widget
-  Widget _buildRoleBadge(String role) {
-    Color badgeColor;
-    IconData badgeIcon;
-    
-    switch (role) {
-      case 'Admin':
-        badgeColor = Colors.amber;
-        badgeIcon = Icons.admin_panel_settings;
-        break;
-      case 'HR':
-        badgeColor = Colors.blue;
-        badgeIcon = Icons.business_center;
-        break;
-      case 'Supervisor':
-        badgeColor = Colors.green;
-        badgeIcon = Icons.supervisor_account;
-        break;
-      case 'Accountant':
-        badgeColor = Colors.orange;
-        badgeIcon = Icons.account_balance_wallet;
-        break;
-      default:
-        badgeColor = Colors.grey;
-        badgeIcon = Icons.person;
-    }
-
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              badgeColor.withValues(alpha: 0.1),
-              badgeColor.withValues(alpha: 0.2),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: badgeColor,
-            width: 2,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                badgeIcon,
-                color: badgeColor,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$role Access',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: badgeColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'You have extended privileges in the system',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDraftReminder() {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.orange.shade50,
-                Colors.orange.shade100,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.orange.shade300,
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.orange.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.info_outline,
-                  color: Colors.orange.shade900,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Draft Application',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Complete and submit your application to proceed',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange.shade800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.orange.shade700,
-                size: 16,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResponsiveApplicationCard({
-    required QueryDocumentSnapshot doc,
-    required Map<String, dynamic> data,
-    required String status,
-    required double screenWidth,
-    required int index,
-  }) {
-    // Adaptive sizing based on screen width
-    final cardHorizontalPadding = (screenWidth * 0.05).clamp(16.0, 24.0);
-    final cardVerticalPadding = (screenWidth * 0.04).clamp(14.0, 20.0);
-    final titleSize = (screenWidth * 0.045).clamp(16.0, 20.0);
-    final subtitleSize = (screenWidth * 0.035).clamp(12.0, 14.0);
-    final metaSize = (screenWidth * 0.030).clamp(11.0, 13.0);
-    final iconSize = (screenWidth * 0.04).clamp(14.0, 18.0);
-    final spacing = (screenWidth * 0.03).clamp(12.0, 16.0);
-
     return Container(
-      margin: EdgeInsets.only(bottom: spacing),
-      child: Card(
-        elevation: 3,
-        shadowColor: Colors.black.withValues(alpha: 0.1),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: InkWell(
-          onTap: () {
-            _logger.i('Application card clicked: ${doc.id}');
-            _logger.d('Opening application with status: $status');
-            _openApplication(doc.id, status);
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: cardHorizontalPadding,
-              vertical: cardVerticalPadding,
-            ),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [badgeColor.withValues(alpha: 0.1), badgeColor.withValues(alpha: 0.2)]),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor, width: 2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
+            child: Icon(badgeIcon, color: badgeColor, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header: Name and Status Badge
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['personalInfo']?['fullName'] ?? 'Application',
-                            style: TextStyle(
-                              fontSize: titleSize,
-                              fontWeight: FontWeight.bold,
-                              color: const Color.fromARGB(255, 84, 4, 108),
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          SizedBox(height: spacing * 0.3),
-                          Text(
-                            data['employmentDetails']?['jobTitle'] ?? 'Position not specified',
-                            style: TextStyle(
-                              fontSize: subtitleSize,
-                              color: Colors.grey.shade600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(width: spacing * 0.5),
-                    _buildResponsiveStatusBadge(status, screenWidth),
-                  ],
-                ),
-
-                SizedBox(height: spacing),
-
-                // Divider
-                Divider(
-                  color: Colors.grey.shade200,
-                  thickness: 1,
-                  height: 1,
-                ),
-
-                SizedBox(height: spacing),
-
-                // Metadata section
-                Wrap(
-                  spacing: spacing,
-                  runSpacing: spacing * 0.5,
-                  children: [
-                    _buildMetaChip(
-                      icon: Icons.calendar_today_outlined,
-                      label: 'Created',
-                      value: _formatDate(data['createdAt']),
-                      iconSize: iconSize,
-                      textSize: metaSize,
-                    ),
-                    if (data['updatedAt'] != null)
-                      _buildMetaChip(
-                        icon: Icons.update_outlined,
-                        label: 'Updated',
-                        value: _formatDate(data['updatedAt']),
-                        iconSize: iconSize,
-                        textSize: metaSize,
-                      ),
-                    if (status == 'submitted' && data['submittedAt'] != null)
-                      _buildMetaChip(
-                        icon: Icons.send_outlined,
-                        label: 'Submitted',
-                        value: _formatDate(data['submittedAt']),
-                        iconSize: iconSize,
-                        textSize: metaSize,
-                        color: Colors.green,
-                      ),
-                  ],
-                ),
-
-                // Additional info for submitted applications
-                if (status != 'draft') ...[
-                  SizedBox(height: spacing),
-                  _buildApplicationProgress(data, screenWidth),
-                ],
+                Text('$_currentUserRole Access', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: badgeColor)),
+                const Text('Extended system privileges enabled', style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileHeaderCard() {
+    if (_isLoadingEmployee) {
+      return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+    }
+    final emp = _employeeData;
+    if (emp == null) return _buildEmptyProfileCard();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Card(
+        elevation: 4,
+        shadowColor: Colors.black.withValues(alpha: 0.05),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  GestureDetector(
+                    onTap: _isUploadingPhoto ? null : _showImagePickerOptions,
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: const Color(0xFF54046C).withValues(alpha: 0.1),
+                      backgroundImage: _profilePhotoUrl != null ? NetworkImage(_profilePhotoUrl!) : null,
+                      child: _profilePhotoUrl == null
+                          ? const Icon(Icons.person, size: 50, color: Color(0xFF54046C))
+                          : null,
+                    ),
+                  ),
+                  if (_isUploadingPhoto)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
+                        ),
+                        child: const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF54046C)),
+                        ),
+                      ),
+                    )
+                  else
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: _showImagePickerOptions,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF54046C),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2))],
+                          ),
+                          child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(emp.personalInfo.fullName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              Text(emp.employmentDetails.jobTitle, style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: emp.status == 'approved' ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('Status: ${emp.status.toUpperCase()}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: emp.status == 'approved' ? Colors.green : Colors.orange)),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildResponsiveStatusBadge(String status, double screenWidth) {
-    final badgeTextSize = (screenWidth * 0.028).clamp(10.0, 12.0);
-    final badgeIconSize = (screenWidth * 0.035).clamp(14.0, 16.0);
-    final badgePadding = (screenWidth * 0.02).clamp(8.0, 12.0);
-
-    Color color;
-    IconData icon;
-    String text;
-
-    switch (status) {
-      case 'submitted':
-        color = Colors.orange;
-        icon = Icons.hourglass_empty;
-        text = 'Submitted';
-        break;
-      case 'approved':
-        color = Colors.green;
-        icon = Icons.check_circle;
-        text = 'Approved';
-        break;
-      case 'rejected':
-        color = Colors.red;
-        icon = Icons.cancel;
-        text = 'Rejected';
-        break;
-      default:
-        color = Colors.grey;
-        icon = Icons.edit_note;
-        text = 'Draft';
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: badgePadding,
-        vertical: badgePadding * 0.5,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: badgeIconSize, color: color),
-          SizedBox(width: badgePadding * 0.4),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: badgeTextSize,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetaChip({
-    required IconData icon,
-    required String label,
-    required String value,
-    required double iconSize,
-    required double textSize,
-    Color? color,
-  }) {
-    final chipColor = color ?? Colors.grey.shade700;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: iconSize, color: chipColor),
-          const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: TextStyle(
-              fontSize: textSize,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: textSize,
-              color: chipColor,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildApplicationProgress(Map<String, dynamic> data, double screenWidth) {
-    final progressTextSize = (screenWidth * 0.030).clamp(11.0, 13.0);
-
-    // Calculate completion percentage based on filled fields
-    final personalInfo = data['personalInfo'] as Map<String, dynamic>? ?? {};
-    final employmentDetails = data['employmentDetails'] as Map<String, dynamic>? ?? {};
-    final statutoryDocs = data['statutoryDocs'] as Map<String, dynamic>? ?? {};
-    final payrollDetails = data['payrollDetails'] as Map<String, dynamic>? ?? {};
-
-    int totalFields = 15;
-    int filledFields = 0;
-
-    // Count filled personal info fields
-    if (personalInfo['fullName']?.toString().isNotEmpty ?? false) filledFields++;
-    if (personalInfo['email']?.toString().isNotEmpty ?? false) filledFields++;
-    if (personalInfo['phoneNumber']?.toString().isNotEmpty ?? false) filledFields++;
-    if (personalInfo['nationalIdOrPassport']?.toString().isNotEmpty ?? false) filledFields++;
-
-    // Count employment details
-    if (employmentDetails['jobTitle']?.toString().isNotEmpty ?? false) filledFields++;
-    if (employmentDetails['department']?.toString().isNotEmpty ?? false) filledFields++;
-    if (employmentDetails['employmentType']?.toString().isNotEmpty ?? false) filledFields++;
-    if (employmentDetails['startDate'] != null) filledFields++;
-
-    // Count statutory docs
-    if (statutoryDocs['kraPinNumber']?.toString().isNotEmpty ?? false) filledFields++;
-    if (statutoryDocs['nssfNumber']?.toString().isNotEmpty ?? false) filledFields++;
-    if (statutoryDocs['nhifNumber']?.toString().isNotEmpty ?? false) filledFields++;
-
-    // Count payroll details
-    if (payrollDetails['basicSalary'] != null) filledFields++;
-    if (payrollDetails['bankDetails']?['bankName']?.toString().isNotEmpty ?? false) filledFields++;
-    if (payrollDetails['bankDetails']?['accountNumber']?.toString().isNotEmpty ?? false) filledFields++;
-    if (payrollDetails['bankDetails']?['branchName']?.toString().isNotEmpty ?? false) filledFields++;
-
-    final percentage = (filledFields / totalFields * 100).clamp(0, 100).toInt();
-
+  Widget _buildSidebarContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Application Progress',
-              style: TextStyle(
-                fontSize: progressTextSize,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            Text(
-              '$percentage%',
-              style: TextStyle(
-                fontSize: progressTextSize,
-                fontWeight: FontWeight.bold,
-                color: percentage == 100 ? Colors.green : Colors.orange,
-              ),
-            ),
-          ],
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text('MENU', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1.5)),
         ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: percentage / 100,
-            backgroundColor: Colors.grey.shade200,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              percentage == 100 ? Colors.green : Colors.orange,
-            ),
-            minHeight: 6,
-          ),
-        ),
+        ..._menuItems.map((item) => _buildNavItem(item, isDrawer: false)),
+        const SizedBox(height: 12),
       ],
     );
   }
 
-  Widget _buildEmptyState({
-    required IconData icon,
-    required String title,
-    required String message,
-  }) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 80, color: Colors.grey.shade300),
-          const SizedBox(height: 24),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              message,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyStateWithAction({
-    required IconData icon,
-    required String title,
-    required String message,
-    required String actionLabel,
-    required VoidCallback onAction,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+  Widget _buildMobileDrawer() {
+    return Drawer(
+      child: Container(
+        color: const Color(0xFFF5F5FA),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 84, 4, 108).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 64,
-                color: const Color.fromARGB(255, 84, 4, 108),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color.fromARGB(255, 84, 4, 108),
+              padding: const EdgeInsets.only(top: 50, bottom: 20, left: 20, right: 20),
+              color: const Color(0xFF54046C),
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.person_outline, color: Colors.white, size: 40),
+                  const SizedBox(height: 12),
+                  Text(_employeeData?.personalInfo.fullName ?? 'Employee', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('Select a section to view', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.add_circle_outline, size: 24),
-              label: Text(
-                actionLabel,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(255, 84, 4, 108),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 4,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: _menuItems.map((item) => _buildNavItem(item, isDrawer: true)).toList(),
               ),
             ),
           ],
@@ -1164,259 +699,95 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     );
   }
 
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-          const SizedBox(height: 16),
-          Text(
-            'Error loading applications',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Please check your permissions or try again later',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              _logger.i('Retry button clicked - rebuilding widget');
-              setState(() {});
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 84, 4, 108),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(dynamic timestamp) {
-    if (timestamp == null) return 'N/A';
-    try {
-      final date = (timestamp as Timestamp).toDate();
-      return DateFormat('MMM dd, yyyy').format(date);
-    } catch (e) {
-      _logger.w('Error formatting date', error: e);
-      return 'Invalid date';
-    }
-  }
-
-  void _openApplication(String docId, String status) {
-    _logger.i('Opening application: $docId (Status: $status)');
-
-    final collection = status == 'draft' ? 'Draft' : 'EmployeeDetails';
-    _logger.d('Fetching from $collection collection');
-
-    _firestore.collection(collection).doc(docId).get().then((docSnapshot) {
-      if (!mounted) {
-        _logger.w('Widget disposed before document fetch completed');
-        return;
-      }
-
-      if (!docSnapshot.exists) {
-        _logger.e('Document not found: $docId in $collection');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Application not found'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      try {
-        final data = docSnapshot.data() as Map<String, dynamic>;
-        final employee = EmployeeOnboarding.fromMap(data);
-        _logger.i('Successfully loaded employee data for: ${employee.personalInfo.fullName}');
-
-        _viewOrEditApplication(employee, docId);
-      } catch (e, stackTrace) {
-        _logger.e('Error parsing employee data', error: e, stackTrace: stackTrace);
-
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading application: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }).catchError((error) {
-      _logger.e('Error fetching document', error: error);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading application: $error'),
-          backgroundColor: Colors.red,
+  Widget _buildNavItem(_MenuItem item, {required bool isDrawer}) {
+    final isSelected = _activeMenuItem == item.title;
+    final Color activeColor = item.color;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _activeMenuItem = item.title;
+          if (item.title != 'Leave Application') _showLeaveForm = false;
+        });
+        if (isDrawer) Navigator.pop(context);
+      },
+      child: Container(
+        margin: isDrawer ? const EdgeInsets.symmetric(horizontal: 12, vertical: 4) : const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withValues(alpha: 0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(isDrawer ? 12 : 10),
+          border: isSelected && !isDrawer ? Border(left: BorderSide(color: activeColor, width: 3)) : null,
         ),
-      );
-    });
-  }
-
-  void _startNewApplication() {
-    _logger.i('Starting new application');
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const EmployeeOnboardingWizard(),
-      ),
-    ).then((_) {
-      _logger.d('Returned from new application wizard, refreshing list');
-      setState(() {});
-    });
-  }
-
-  void _viewOrEditApplication(EmployeeOnboarding employee, String docId) {
-    _logger.i('Viewing/editing application for ${employee.personalInfo.fullName} '
-        '(DocID: $docId, Status: ${employee.status})');
-
-    if (employee.status == 'draft') {
-      _logger.d('Opening application in edit mode');
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EmployeeOnboardingWizard(
-            existingEmployee: employee,
-          ),
-        ),
-      ).then((_) {
-        _logger.d('Returned from editing application, refreshing list');
-        setState(() {});
-      });
-    } else {
-      _logger.d('Opening application in view-only mode');
-      _showDetailedApplicationView(employee);
-    }
-  }
-
-  void _showDetailedApplicationView(EmployeeOnboarding employee) {
-    _logger.d('Showing detailed application view for ${employee.personalInfo.fullName}');
-    
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          backgroundColor: const Color.fromARGB(255, 245, 245, 250),
-          appBar: AppBar(
-            backgroundColor: const Color.fromARGB(255, 84, 4, 108),
-            elevation: 0,
-            title: const Text(
-              'Application Details',
-              style: TextStyle(fontWeight: FontWeight.bold),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected ? activeColor.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(item.icon, size: 20, color: isSelected ? activeColor : Colors.grey[600]),
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new),
-              onPressed: () => Navigator.pop(context),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                item.title,
+                style: TextStyle(fontSize: 15, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500, color: isSelected ? activeColor : Colors.grey[800]),
+              ),
             ),
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDetailSection(
-                  title: 'Personal Information',
-                  icon: Icons.person,
-                  children: [
-                    _buildDetailRow('Full Name', employee.personalInfo.fullName),
-                    _buildDetailRow('Email', employee.personalInfo.email),
-                    _buildDetailRow('Phone', employee.personalInfo.phoneNumber),
-                    _buildDetailRow('National ID', employee.personalInfo.nationalIdOrPassport),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _buildDetailSection(
-                  title: 'Employment Details',
-                  icon: Icons.work,
-                  children: [
-                    _buildDetailRow('Job Title', employee.employmentDetails.jobTitle),
-                    _buildDetailRow('Department', employee.employmentDetails.department),
-                    _buildDetailRow('Employment Type', employee.employmentDetails.employmentType),
-                    _buildDetailRow(
-                      'Start Date',
-                      employee.employmentDetails.startDate != null
-                          ? DateFormat('dd MMM yyyy').format(employee.employmentDetails.startDate!)
-                          : '-',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _buildDetailSection(
-                  title: 'Statutory Information',
-                  icon: Icons.gavel,
-                  children: [
-                    _buildDetailRow('KRA PIN', employee.statutoryDocs.kraPinNumber),
-                    _buildDetailRow('NSSF Number', employee.statutoryDocs.nssfNumber),
-                    _buildDetailRow('NHIF Number', employee.statutoryDocs.nhifNumber),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _buildDetailSection(
-                  title: 'Payroll Details',
-                  icon: Icons.account_balance,
-                  children: [
-                    _buildDetailRow(
-                      'Basic Salary',
-                      'KES ${NumberFormat('#,###').format(employee.payrollDetails.basicSalary)}',
-                    ),
-                    _buildDetailRow('Bank Name', employee.payrollDetails.bankDetails!.bankName),
-                    _buildDetailRow('Account Number', employee.payrollDetails.bankDetails!.accountNumber),
-                    _buildDetailRow('Branch', employee.payrollDetails.bankDetails!.branch),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _buildDetailSection(
-                  title: 'Application Status',
-                  icon: Icons.info,
-                  children: [
-                    _buildDetailRow('Status', employee.status.toUpperCase()),
-                    if (employee.submittedAt != null)
-                      _buildDetailRow(
-                        'Submitted On',
-                        DateFormat('dd MMM yyyy, hh:mm a').format(employee.submittedAt!),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+            if (isSelected) Icon(Icons.check_circle, size: 18, color: activeColor),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailSection({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
+  Widget _buildSectionContent(String sectionId, EmployeeOnboarding emp) {
+    switch (sectionId) {
+      case 'Personal Information': return _buildPersonalInfoSection(emp);
+      case 'Employment Details': return _buildEmploymentDetailsSection(emp);
+      case 'Statutory & Remuneration': return _buildStatutoryRemunerationSection(emp);
+      case 'Academic & File Documents': return _buildAcademicDocumentsSection(emp);
+      case 'Contracts & Internal Compliance': return _buildContractsComplianceSection(emp);
+      case 'Work Tools & System Benefits': return _buildWorkToolsBenefitsSection(emp);
+      default: return _buildPersonalInfoSection(emp);
+    }
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+        color: color.withValues(alpha: 0.05),
+        border: Border(bottom: BorderSide(color: color.withValues(alpha: 0.1))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                const SizedBox(height: 2),
+                Text('Last updated: ${DateFormat("dd MMM yyyy").format(DateTime.now())}', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildInfoCard({required IconData icon, required String label, required String value, Color? color}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1424,62 +795,869 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 84, 4, 108).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  color: const Color.fromARGB(255, 84, 4, 108),
-                  size: 20,
-                ),
+                decoration: BoxDecoration(color: (color ?? const Color(0xFF54046C)).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, size: 18, color: color ?? const Color(0xFF54046C)),
               ),
               const SizedBox(width: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color.fromARGB(255, 84, 4, 108),
-                ),
-              ),
+              Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500))),
             ],
           ),
-          const SizedBox(height: 16),
-          ...children,
+          const SizedBox(height: 12),
+          Text(value.isEmpty ? 'Not Disclosed' : value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87)),
         ],
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildResponsiveGrid(List<Widget> children) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width > 600 ? 2 : 1;
+        final itemWidth = (width - (crossAxisCount - 1) * 16) / crossAxisCount;
+        return Wrap(spacing: 16, runSpacing: 16, children: children.map((child) => SizedBox(width: itemWidth, child: child)).toList());
+      },
+    );
+  }
+
+  Widget _buildSubsectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 12, top: 8),
+      child: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[700], letterSpacing: 0.5)),
+    );
+  }
+
+  Widget _buildStatusCard({required IconData icon, required String label, required bool status, required Color activeColor}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: status ? activeColor.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: status ? activeColor.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.2)),
+      ),
       child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: status ? activeColor.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, size: 20, color: status ? activeColor : Colors.grey),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[800])),
+                const SizedBox(height: 4),
+                Text(status ? 'Confirmed & Verified' : 'Pending Administrative Review', style: TextStyle(fontSize: 12, color: status ? activeColor : Colors.grey[600], fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          Icon(status ? Icons.check_circle : Icons.pending_outlined, color: status ? activeColor : Colors.grey),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentCard(DocumentInfo doc) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.03), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.picture_as_pdf_outlined, color: Colors.redAccent, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(doc.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text('Uploaded ${DateFormat("dd MMM yyyy").format(doc.uploadedAt)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ],
+            ),
+          ),
+          IconButton(icon: Icon(Icons.open_in_new, size: 18, color: Colors.grey[600]), onPressed: () {}),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEquipmentCard(IssuedEquipment equipment) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: const Color(0xFF54046C).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.laptop_mac_rounded, color: Color(0xFF54046C), size: 20),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(equipment.itemName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
+            ],
           ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value.isNotEmpty ? value : '-',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-              ),
-            ),
-          ),
+          const Divider(height: 20),
+          _buildMiniInfoRow('Serial Number', equipment.serialNumber),
+          _buildMiniInfoRow('Issued Date', equipment.issuedDate != null ? DateFormat("dd MMM yyyy").format(equipment.issuedDate!) : 'N/A'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMiniInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(children: [
+        Text('$label: ', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+
+  Widget _buildPersonalInfoSection(EmployeeOnboarding emp) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Personal Information', Icons.person_outline_rounded, Colors.blue),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildResponsiveGrid([
+                _buildInfoCard(icon: Icons.badge_outlined, label: 'Full Official Name', value: emp.personalInfo.fullName, color: Colors.blue),
+                _buildInfoCard(icon: Icons.fingerprint_outlined, label: 'National ID / Passport', value: emp.personalInfo.nationalIdOrPassport, color: Colors.blue),
+                _buildInfoCard(icon: Icons.cake_outlined, label: 'Date of Birth', value: emp.personalInfo.dateOfBirth != null ? DateFormat("dd MMMM yyyy").format(emp.personalInfo.dateOfBirth!) : 'N/A', color: Colors.blue),
+                _buildInfoCard(icon: Icons.wc_outlined, label: 'Gender', value: emp.personalInfo.gender, color: Colors.blue),
+                _buildInfoCard(icon: Icons.phone_outlined, label: 'Primary Phone', value: emp.personalInfo.phoneNumber, color: Colors.blue),
+                _buildInfoCard(icon: Icons.alternate_email_outlined, label: 'Personal Email', value: emp.personalInfo.email, color: Colors.blue),
+                _buildInfoCard(icon: Icons.mark_as_unread_outlined, label: 'Postal Address', value: emp.personalInfo.postalAddress, color: Colors.blue),
+                _buildInfoCard(icon: Icons.home_outlined, label: 'Physical Address', value: emp.personalInfo.physicalAddress, color: Colors.blue),
+              ]),
+              const SizedBox(height: 24),
+              _buildSubsectionTitle('Next of Kin / Emergency Contact'),
+              _buildResponsiveGrid([
+                _buildInfoCard(icon: Icons.person_pin_outlined, label: 'Kin Name', value: emp.personalInfo.nextOfKin.name, color: Colors.red),
+                _buildInfoCard(icon: Icons.family_restroom_outlined, label: 'Relationship', value: emp.personalInfo.nextOfKin.relationship, color: Colors.red),
+                _buildInfoCard(icon: Icons.phone_callback_outlined, label: 'Emergency Phone', value: emp.personalInfo.nextOfKin.contact, color: Colors.red),
+              ]),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmploymentDetailsSection(EmployeeOnboarding emp) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Employment Details', Icons.work_outline_rounded, Colors.teal),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: _buildResponsiveGrid([
+            _buildInfoCard(icon: Icons.assignment_ind_outlined, label: 'Official Job Title', value: emp.employmentDetails.jobTitle, color: Colors.teal),
+            _buildInfoCard(icon: Icons.lan_outlined, label: 'Business Department', value: emp.employmentDetails.department, color: Colors.teal),
+            _buildInfoCard(icon: Icons.layers_outlined, label: 'Employment Category', value: emp.employmentDetails.employmentType, color: Colors.teal),
+            _buildInfoCard(icon: Icons.calendar_month_outlined, label: 'Commencement Date', value: emp.employmentDetails.startDate != null ? DateFormat("dd MMM yyyy").format(emp.employmentDetails.startDate!) : 'N/A', color: Colors.teal),
+            _buildInfoCard(icon: Icons.more_time_rounded, label: 'Working Hours Structure', value: emp.employmentDetails.workingHours, color: Colors.teal),
+            _buildInfoCard(icon: Icons.location_on_outlined, label: 'Assigned Office Location', value: emp.employmentDetails.workLocation, color: Colors.teal),
+            _buildInfoCard(icon: Icons.supervisor_account_outlined, label: 'Reporting Supervisor', value: emp.employmentDetails.supervisorName, color: Colors.teal),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatutoryRemunerationSection(EmployeeOnboarding emp) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Statutory & Remuneration Structure', Icons.account_balance_wallet_outlined, Colors.purple),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSubsectionTitle('Statutory Registration Numbers'),
+              _buildResponsiveGrid([
+                _buildInfoCard(icon: Icons.article_outlined, label: 'KRA PIN Registration', value: emp.statutoryDocs.kraPinNumber, color: Colors.purple),
+                _buildInfoCard(icon: Icons.shield_outlined, label: 'NSSF Identification', value: emp.statutoryDocs.nssfNumber, color: Colors.purple),
+                _buildInfoCard(icon: Icons.local_hospital_outlined, label: 'NHIF Identification', value: emp.statutoryDocs.nhifNumber, color: Colors.purple),
+              ]),
+              const SizedBox(height: 24),
+              _buildSubsectionTitle('Remuneration & Bank Channels'),
+              _buildResponsiveGrid([
+                _buildInfoCard(icon: Icons.payments_outlined, label: 'Basic Base Gross Salary', value: 'KES ${emp.payrollDetails.basicSalary.toStringAsFixed(2)}', color: Colors.green),
+                _buildInfoCard(icon: Icons.account_balance_rounded, label: 'Bank Entity Affiliation', value: emp.payrollDetails.bankDetails?.bankName ?? 'N/A', color: Colors.green),
+                _buildInfoCard(icon: Icons.credit_card_outlined, label: 'Account Destination Number', value: emp.payrollDetails.bankDetails?.accountNumber ?? 'N/A', color: Colors.green),
+                if (emp.payrollDetails.mpesaDetails != null) ...[
+                  _buildInfoCard(icon: Icons.phone_iphone_outlined, label: 'Mobile Money Phone', value: emp.payrollDetails.mpesaDetails!.phoneNumber, color: Colors.green),
+                  _buildInfoCard(icon: Icons.person_pin_rounded, label: 'Mobile Money Registered Name', value: emp.payrollDetails.mpesaDetails!.name, color: Colors.green),
+                ],
+              ]),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAcademicDocumentsSection(EmployeeOnboarding emp) {
+    final hasDocs = emp.academicDocs.academicCertificates.isNotEmpty || emp.academicDocs.professionalCertificates.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Academic & File Documents', Icons.school_outlined, Colors.orange),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!hasDocs)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.folder_open_outlined, size: 48, color: Colors.grey[400]),
+                        const SizedBox(height: 12),
+                        Text('No file registries uploaded', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+                        const SizedBox(height: 4),
+                        Text('Contact HR to upload your academic and professional documents', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+              if (emp.academicDocs.academicCertificates.isNotEmpty) ...[
+                _buildSubsectionTitle('Academic Degrees & Credentials'),
+                ...emp.academicDocs.academicCertificates.map((doc) => _buildDocumentCard(doc)),
+              ],
+              if (emp.academicDocs.professionalCertificates.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildSubsectionTitle('Professional Affiliations / Body Credentials'),
+                ...emp.academicDocs.professionalCertificates.map((doc) => _buildDocumentCard(doc)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContractsComplianceSection(EmployeeOnboarding emp) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Contracts & Internal Compliance', Icons.gavel_outlined, Colors.indigo),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildResponsiveGrid([
+                _buildStatusCard(icon: Icons.fact_check_outlined, label: 'Company Code of Conduct Signed', status: emp.contractsForms.codeOfConductAcknowledged, activeColor: Colors.indigo),
+                _buildStatusCard(icon: Icons.security_outlined, label: 'Data Protection Consent Signed', status: emp.contractsForms.dataProtectionConsentGiven, activeColor: Colors.indigo),
+              ]),
+              const SizedBox(height: 20),
+              _buildInfoCard(icon: Icons.history_toggle_off_rounded, label: 'Compliance Timeline Clock', value: emp.contractsForms.consentDate != null ? DateFormat("dd MMM yyyy HH:mm").format(emp.contractsForms.consentDate!) : 'N/A', color: Colors.indigo),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkToolsBenefitsSection(EmployeeOnboarding emp) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Work Tools & System Benefits', Icons.card_membership_outlined, Colors.green),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildResponsiveGrid([
+                _buildInfoCard(icon: Icons.mark_as_unread_outlined, label: 'Assigned Enterprise Work Email', value: emp.workTools.workEmail ?? 'Pending Provisioning', color: Colors.green),
+              ]),
+              const SizedBox(height: 16),
+              _buildResponsiveGrid([
+                _buildStatusCard(icon: Icons.assignment_turned_in_outlined, label: 'HRIS Cloud Profile Maintained', status: emp.workTools.hrisProfileCreated, activeColor: Colors.green),
+                _buildStatusCard(icon: Icons.vpn_key_outlined, label: 'Workspace Core Master System Access', status: emp.workTools.systemAccessGranted, activeColor: Colors.green),
+              ]),
+              if (emp.workTools.issuedEquipment.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                _buildSubsectionTitle('Assigned Hardware Device Inventories'),
+                ...emp.workTools.issuedEquipment.map((equipment) => _buildEquipmentCard(equipment)),
+              ],
+              if (emp.benefitsInsurance.beneficiaries.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                _buildSubsectionTitle('Listed Insurance Policy Premium Beneficiaries'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: emp.benefitsInsurance.beneficiaries.map((b) {
+                    return Chip(
+                      avatar: const Icon(Icons.person_pin_rounded, size: 18),
+                      label: Text('${b.name} (${b.relationship})'),
+                      backgroundColor: Colors.green.withValues(alpha: 0.1),
+                      side: BorderSide(color: Colors.green.withValues(alpha: 0.3)),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeaveApplicationSection() {
+    final balance = _leaveBalance ?? {};
+    final annualUsed = (balance['annualUsed'] as num?)?.toInt() ?? 0;
+    final annualRemaining = 21 - annualUsed;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLeaveBalanceCards(),
+          const SizedBox(height: 24),
+          if (!_showLeaveForm)
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: FloatingActionButton.extended(
+                onPressed: () => setState(() => _showLeaveForm = true),
+                icon: const Icon(Icons.add_circle_outline, size: 28),
+                label: const Text('Apply Leave', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                backgroundColor: const Color(0xFF54046C),
+                foregroundColor: Colors.white,
+                elevation: 6,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          if (_showLeaveForm) ...[
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionHeader('Leave Application', Icons.edit_calendar_outlined, Colors.redAccent),
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: LeaveApplicationForm(
+                        showDragHandle: false,
+                        remainingAnnualDays: annualRemaining,
+                        onCancel: () => setState(() => _showLeaveForm = false),
+                        onSubmit: (application) async {
+                          await _submitLeaveApplication(application);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          _buildLeaveHistorySection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeaveBalanceCards() {
+    final balance = _leaveBalance ?? {};
+    return Row(
+      children: [
+        Expanded(
+          child: _buildLeaveStatCard(
+            title: "Annual Leave",
+            used: (balance['annualUsed'] as num?)?.toInt() ?? 0,
+            total: 21,
+            color: Colors.teal,
+            icon: Icons.beach_access,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildLeaveStatCard(
+            title: "Sick Leave",
+            used: (balance['sickUsed'] as num?)?.toInt() ?? 0,
+            total: 7,
+            color: Colors.orange,
+            icon: Icons.medical_services,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeaveStatCard({required String title, required int used, required int total, required Color color, required IconData icon}) {
+    final remaining = total - used;
+    final percentage = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 12),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 8),
+            Text('$used / $total used', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+            const SizedBox(height: 4),
+            Text('$remaining days left', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: remaining > 3 ? color : Colors.red)),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(value: percentage, backgroundColor: Colors.grey[200], color: color, minHeight: 6),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeaveHistorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 12),
+          child: Text('Recent Leave Applications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        if (_isLoadingLeave) const Center(child: CircularProgressIndicator()),
+        if (!_isLoadingLeave && _leaveHistory.isEmpty)
+          const Center(child: Padding(padding: EdgeInsets.all(32), child: Text('No leave applications yet', style: TextStyle(color: Colors.grey)))),
+        if (_leaveHistory.isNotEmpty)
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _leaveHistory.length,
+            itemBuilder: (context, index) {
+              final data = _leaveHistory[index].data() as Map<String, dynamic>;
+              return _buildLeaveHistoryCard(data);
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildLeaveHistoryCard(Map<String, dynamic> data) {
+    final type = data['leaveType'] ?? '';
+    final start = (data['startDate'] as Timestamp?)?.toDate();
+    final end = (data['endDate'] as Timestamp?)?.toDate();
+    final status = data['status'] ?? 'pending';
+    Color statusColor = Colors.orange;
+    if (status == 'approved') statusColor = Colors.green;
+    if (status == 'rejected') statusColor = Colors.red;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: statusColor.withValues(alpha: 0.1),
+            child: Icon(type.toLowerCase().contains('annual') ? Icons.beach_access : Icons.medical_services, color: statusColor),
+          ),
+          title: Text(type, style: const TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text(start != null && end != null ? '${DateFormat("dd MMM").format(start)} - ${DateFormat("dd MMM yyyy").format(end)}' : 'No dates'),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+            child: Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyProfileCard() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            children: const [
+              Icon(Icons.person_off, size: 80, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('Profile Not Found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Contact HR to complete your onboarding', textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRolePanelButton() {
+    if (_currentUserRole == null || _currentUserRole == UserRoles.employee) return const SizedBox.shrink();
+    IconData icon;
+    Color iconColor;
+    String tooltip;
+    VoidCallback onPressed;
+    switch (_currentUserRole) {
+      case UserRoles.admin:
+        icon = Icons.admin_panel_settings; iconColor = Colors.amber; tooltip = 'Admin Panel';
+        onPressed = () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RoleSelectionScreen()));
+        break;
+      case UserRoles.hr:
+        icon = Icons.business_center; iconColor = Colors.blue; tooltip = 'HR Dashboard';
+        onPressed = () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HRDashboard()));
+        break;
+      case UserRoles.accountant:
+        icon = Icons.account_balance_wallet; iconColor = Colors.orange; tooltip = 'Accountant Dashboard';
+        onPressed = () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Accountant Dashboard coming soon!'), backgroundColor: Colors.orange));
+        break;
+      case UserRoles.supervisor:
+        icon = Icons.supervisor_account; iconColor = Colors.green; tooltip = 'Supervisor Dashboard';
+        onPressed = () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupervisorDashboard()));
+        break;
+      default: return const SizedBox.shrink();
+    }
+    return IconButton(icon: Icon(icon, color: iconColor), onPressed: onPressed, tooltip: tooltip);
+  }
+}
+
+class _MenuItem {
+  final String title;
+  final IconData icon;
+  final Color color;
+  _MenuItem(this.title, this.icon, this.color);
+}
+
+class LeaveApplicationForm extends StatefulWidget {
+  final Function(Map<String, dynamic>) onSubmit;
+  final VoidCallback? onCancel;
+  final bool showDragHandle;
+  final int remainingAnnualDays;
+
+  const LeaveApplicationForm({
+    super.key,
+    required this.onSubmit,
+    this.onCancel,
+    this.showDragHandle = true,
+    this.remainingAnnualDays = 21,
+  });
+
+  @override State<LeaveApplicationForm> createState() => _LeaveApplicationFormState();
+}
+
+class _LeaveApplicationFormState extends State<LeaveApplicationForm> {
+  final List<String> _leaveTypes = [
+    'Annual Leave',
+    'Sick Leave (Medical/Maternity)',
+    'Compassionate & Bereavement',
+    'Maternity Leave',
+    'Paternity Leave',
+  ];
+
+  late FormGroup form;
+
+  @override void initState() {
+    super.initState();
+    form = fb.group({
+      'leaveType': FormControl<String>(value: 'Annual Leave', validators: [Validators.required]),
+      'startDate': FormControl<DateTime>(validators: [Validators.required]),
+      'endDate': FormControl<DateTime>(validators: [Validators.required]),
+      'isPaid': FormControl<bool>(value: true, validators: [Validators.required]),
+      'coverageEmployee': FormControl<String>(validators: [Validators.required, Validators.email]),
+      'reason': FormControl<String>(validators: [Validators.required, Validators.minLength(10)]),
+      'notes': FormControl<String>(value: ''),
+    }, [
+      Validators.delegate((control) => _validateDatesSequence(control)),
+      Validators.delegate((control) => _validateAnnualLeaveCap(control)),
+    ]);
+  }
+
+  Map<String, dynamic>? _validateDatesSequence(AbstractControl<dynamic> control) {
+    final formGroup = control as FormGroup;
+    final startCtrl = formGroup.control('startDate');
+    final endCtrl = formGroup.control('endDate');
+    if (startCtrl.value != null && endCtrl.value != null) {
+      final DateTime startDate = startCtrl.value as DateTime;
+      final DateTime endDate = endCtrl.value as DateTime;
+      if (endDate.isBefore(startDate)) {
+        endCtrl.setErrors({'dateOrderInvalid': true});
+        return {'dateOrderInvalid': true};
+      } else {
+        endCtrl.removeError('dateOrderInvalid');
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _validateAnnualLeaveCap(AbstractControl<dynamic> control) {
+    final formGroup = control as FormGroup;
+    final leaveType = formGroup.control('leaveType').value as String?;
+    final startCtrl = formGroup.control('startDate');
+    final endCtrl = formGroup.control('endDate');
+    if (leaveType == 'Annual Leave' && startCtrl.value != null && endCtrl.value != null) {
+      final days = _calculateBusinessDays(startCtrl.value as DateTime, endCtrl.value as DateTime);
+      if (days > widget.remainingAnnualDays) {
+        return {'annualLeaveExceeded': {'requested': days, 'remaining': widget.remainingAnnualDays}};
+      }
+    }
+    return null;
+  }
+
+
+  int _calculateBusinessDays(DateTime start, DateTime end) {
+    if (end.isBefore(start)) return 0;
+    int count = 0;
+    DateTime current = DateTime(start.year, start.month, start.day);
+    DateTime endDate = DateTime(end.year, end.month, end.day);
+    while (!current.isAfter(endDate)) {
+      final weekday = current.weekday;
+      if (weekday != DateTime.saturday && weekday != DateTime.sunday) {
+        count++;
+      }
+      current = current.add(const Duration(days: 1));
+    }
+    return count;
+  }
+
+  int get _calculatedDurationDays {
+    final start = form.control('startDate').value as DateTime?;
+    final end = form.control('endDate').value as DateTime?;
+    if (start == null || end == null) return 0;
+    if (end.isBefore(start)) return 0;
+    return _calculateBusinessDays(start, end);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ReactiveForm(
+      formGroup: form,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.showDragHandle)
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: Colors.grey, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+            if (widget.showDragHandle) ...[
+              const Text('Corporate Leave Request', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF54046C))),
+              const Text('Ensure compliance with internal HR policy guidelines before submission.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const Divider(height: 24, thickness: 1),
+            ],
+            if (!widget.showDragHandle && widget.onCancel != null)
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: widget.onCancel,
+                  tooltip: 'Close form',
+                ),
+              ),
+            ReactiveDropdownField<String>(
+              formControlName: 'leaveType',
+              decoration: const InputDecoration(
+                labelText: 'Leave Category *',
+                prefixIcon: Icon(Icons.assignment_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+              items: _leaveTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ReactiveDatePicker<DateTime>(
+                    formControlName: 'startDate',
+                    firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    builder: (context, picker, child) {
+                      final val = picker.value;
+                      return InkWell(
+                        onTap: () => picker.showPicker(),
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Start Date *',
+                            prefixIcon: Icon(Icons.calendar_today_outlined),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                          ),
+                          child: Text(val != null ? DateFormat("dd MMM yyyy").format(val) : 'Select Date', style: TextStyle(color: val != null ? Colors.black87 : Colors.grey)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ReactiveDatePicker<DateTime>(
+                    formControlName: 'endDate',
+                    firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    builder: (context, picker, child) {
+                      final val = picker.value;
+                      return InkWell(
+                        onTap: () => picker.showPicker(),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'End Date *',
+                            prefixIcon: const Icon(Icons.calendar_today_outlined),
+                            errorText: picker.control.hasError('dateOrderInvalid') && picker.control.touched ? 'Invalid date range' : null,
+                            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                          ),
+                          child: Text(val != null ? DateFormat("dd MMM yyyy").format(val) : 'Select Date', style: TextStyle(color: val != null ? Colors.black87 : Colors.grey)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ReactiveValueListenableBuilder<DateTime>(
+              formControlName: 'endDate',
+              builder: (context, control, child) {
+                final totalDays = _calculatedDurationDays;
+                if (totalDays <= 0) return const SizedBox.shrink();
+                final leaveType = form.control('leaveType').value as String?;
+                final bool exceedsAnnual = leaveType == 'Annual Leave' && totalDays > widget.remainingAnnualDays;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: exceedsAnnual ? Colors.red.withValues(alpha: 0.08) : const Color(0xFF54046C).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(exceedsAnnual ? Icons.warning_amber_rounded : Icons.timelapse, size: 16, color: exceedsAnnual ? Colors.red : const Color(0xFF54046C)),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          exceedsAnnual
+                              ? 'Business days requested: $totalDays. You only have ${widget.remainingAnnualDays} annual leave day(s) remaining. Please reduce the date range.'
+                              : 'Total Business Days Requested: $totalDays Day(s)',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: exceedsAnnual ? Colors.red : const Color(0xFF54046C), fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(12)),
+              child: Material(
+                type: MaterialType.transparency,
+                child: ReactiveCheckboxListTile(
+                  formControlName: 'isPaid',
+                  title: const Text('Request as Paid Leave', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: const Text('Subject to your accrued active company balance accounts.', style: TextStyle(fontSize: 12)),
+                  activeColor: const Color(0xFF54046C),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ReactiveTextField<String>(
+              formControlName: 'coverageEmployee',
+              validationMessages: {
+                'required': (error) => 'Coverage hand-off assignment is required',
+                'email': (error) => 'Please enter a valid corporate email address',
+              },
+              decoration: const InputDecoration(
+                labelText: 'Handover / Coverage Personnel Email *',
+                prefixIcon: Icon(Icons.person_pin_outlined),
+                hintText: 'colleague@firmcompany.com',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ReactiveTextField<String>(
+              formControlName: 'reason',
+              maxLines: 3,
+              validationMessages: {
+                'required': (error) => 'An auditable reason is legally required',
+                'minLength': (error) => 'Provide a clearer description (min. 10 chars)',
+              },
+              decoration: const InputDecoration(
+                labelText: 'Formal Reason for Application *',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ReactiveTextField<String>(
+              formControlName: 'notes',
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Internal Administrative Notes (Optional)',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ReactiveFormConsumer(
+              builder: (context, formGroup, child) {
+                final bool isAnnualExceeded = formGroup.hasError('annualLeaveExceeded');
+                return SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: formGroup.valid && !isAnnualExceeded ? () {
+                      final startValue = formGroup.control('startDate').value as DateTime;
+                      final endValue = formGroup.control('endDate').value as DateTime;
+                      widget.onSubmit({
+                        'leaveType': formGroup.control('leaveType').value,
+                        'startDate': Timestamp.fromDate(startValue),
+                        'endDate': Timestamp.fromDate(endValue),
+                        'days': _calculatedDurationDays,
+                        'isPaid': formGroup.control('isPaid').value,
+                        'coverageEmployee': formGroup.control('coverageEmployee').value,
+                        'reason': formGroup.control('reason').value,
+                        'notes': formGroup.control('notes').value,
+                      });
+                    } : null,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: const Color(0xFF54046C),
+                      disabledBackgroundColor: Colors.grey,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Submit Request', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                );
+              },
+            ),
+            if (widget.showDragHandle) const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
